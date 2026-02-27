@@ -143,12 +143,14 @@ $ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 mqbridge run -c config.jsonn
 
 The following metrics are exported:
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `mqbridge.messages.received` | Counter | Messages received from subscriber |
-| `mqbridge.messages.published` | Counter | Messages published to destination |
-| `mqbridge.messages.errors` | Counter | Message processing errors |
-| `mqbridge.message.processing.duration` | Histogram | Processing duration in seconds |
+| Metric | Type | Description | Attributes |
+|--------|------|-------------|------------|
+| `mqbridge.messages.received` | Counter | Messages received from subscriber | `source_type`, `source_queue` |
+| `mqbridge.messages.published` | Counter | Messages published to destination | `destination_type`, `destination_queue` |
+| `mqbridge.messages.errors` | Counter | Message processing errors | `source_type`, `source_queue` |
+| `mqbridge.message.processing.duration` | Histogram | Processing duration in seconds | `source_type`, `source_queue` |
+
+Attribute values are derived from the bridge configuration and message content. `source_type` / `destination_type` is `rabbitmq` or `simplemq`. `source_queue` is the source queue name. `destination_queue` is the SimpleMQ queue name, or `exchange/routing_key` for RabbitMQ (determined dynamically from each message).
 
 Both HTTP and gRPC protocols are supported. Set `OTEL_EXPORTER_OTLP_PROTOCOL` to `grpc` for gRPC transport (default: `http/protobuf`). All standard `OTEL_*` environment variables are supported.
 

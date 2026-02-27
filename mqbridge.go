@@ -17,9 +17,16 @@ type Subscriber interface {
 	Close() error
 }
 
+// PublishResult holds metadata about a published message.
+type PublishResult struct {
+	Destination string // destination identifier (e.g. queue name, "exchange/routing_key")
+}
+
 // Publisher sends messages to a destination.
 type Publisher interface {
-	Publish(ctx context.Context, msg []byte) error
+	Publish(ctx context.Context, msg []byte) (*PublishResult, error)
+	// Type returns the publisher type name (e.g. "rabbitmq", "simplemq").
+	Type() string
 	Close() error
 }
 
@@ -29,7 +36,6 @@ type Bridge struct {
 	To       []Publisher
 	metrics  *Metrics
 	srcAttrs attribute.Set
-	dstAttrs []attribute.Set
 }
 
 // Run starts the bridge, consuming messages from the subscriber
@@ -38,12 +44,17 @@ func (b *Bridge) Run(ctx context.Context) error {
 	return b.From.Subscribe(ctx, func(ctx context.Context, msg []byte) error {
 		b.metrics.messagesReceived.Add(ctx, 1, metric.WithAttributeSet(b.srcAttrs))
 		start := time.Now()
-		for i, pub := range b.To {
-			if err := pub.Publish(ctx, msg); err != nil {
+		for _, pub := range b.To {
+			result, err := pub.Publish(ctx, msg)
+			if err != nil {
 				b.metrics.messageErrors.Add(ctx, 1, metric.WithAttributeSet(b.srcAttrs))
 				return fmt.Errorf("publish error: %w", err)
 			}
-			b.metrics.messagesPublished.Add(ctx, 1, metric.WithAttributeSet(b.dstAttrs[i]))
+			dstAttrs := attribute.NewSet(
+				attribute.String("destination_type", pub.Type()),
+				attribute.String("destination_queue", result.Destination),
+			)
+			b.metrics.messagesPublished.Add(ctx, 1, metric.WithAttributeSet(dstAttrs))
 		}
 		b.metrics.processingDuration.Record(ctx, time.Since(start).Seconds(), metric.WithAttributeSet(b.srcAttrs))
 		return nil
@@ -126,33 +137,19 @@ func (a *App) Run(ctx context.Context) error {
 	return nil
 }
 
-// DestinationInfo holds type and queue name for a destination, used for test bridge construction.
-type DestinationInfo struct {
-	Type  string
-	Queue string
-}
-
 // NewBridgeForTest creates a Bridge with the given subscriber, publishers, and metric attributes.
 // This is intended for testing only.
-func NewBridgeForTest(sub Subscriber, pubs []Publisher, srcType, srcQueue string, dsts []DestinationInfo) *Bridge {
+func NewBridgeForTest(sub Subscriber, pubs []Publisher, srcType, srcQueue string) *Bridge {
 	m, _ := newMetrics()
 	srcAttrs := attribute.NewSet(
 		attribute.String("source_type", srcType),
 		attribute.String("source_queue", srcQueue),
 	)
-	var dstAttrs []attribute.Set
-	for _, dst := range dsts {
-		dstAttrs = append(dstAttrs, attribute.NewSet(
-			attribute.String("destination_type", dst.Type),
-			attribute.String("destination_queue", dst.Queue),
-		))
-	}
 	return &Bridge{
 		From:     sub,
 		To:       pubs,
 		metrics:  m,
 		srcAttrs: srcAttrs,
-		dstAttrs: dstAttrs,
 	}
 }
 
@@ -196,24 +193,15 @@ func buildBridge(cfg *Config, bc BridgeConfig, m *Metrics) (*Bridge, error) {
 		attribute.String("source_queue", srcQueue),
 	)
 
-	var dstAttrs []attribute.Set
 	for j, to := range bc.To {
 		if to.RabbitMQ != nil {
 			pubs = append(pubs, NewRabbitMQPublisher(cfg.RabbitMQ.URL))
-			dstAttrs = append(dstAttrs, attribute.NewSet(
-				attribute.String("destination_type", "rabbitmq"),
-				attribute.String("destination_queue", ""),
-			))
 		} else if to.SimpleMQ != nil {
 			pub, err := NewSimpleMQPublisher(cfg.SimpleMQ.APIURL, *to.SimpleMQ)
 			if err != nil {
 				return nil, fmt.Errorf("to[%d]: failed to create SimpleMQ publisher: %w", j, err)
 			}
 			pubs = append(pubs, pub)
-			dstAttrs = append(dstAttrs, attribute.NewSet(
-				attribute.String("destination_type", "simplemq"),
-				attribute.String("destination_queue", to.SimpleMQ.Queue),
-			))
 		}
 	}
 
@@ -222,6 +210,5 @@ func buildBridge(cfg *Config, bc BridgeConfig, m *Metrics) (*Bridge, error) {
 		To:       pubs,
 		metrics:  m,
 		srcAttrs: srcAttrs,
-		dstAttrs: dstAttrs,
 	}, nil
 }

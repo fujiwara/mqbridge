@@ -31,23 +31,29 @@ func (s *mockSubscriber) Close() error { return nil }
 
 // mockPublisher records published messages.
 type mockPublisher struct {
-	messages [][]byte
+	messages    [][]byte
+	destination string
+	typeName    string
 }
 
-func (p *mockPublisher) Publish(_ context.Context, msg []byte) error {
+func (p *mockPublisher) Publish(_ context.Context, msg []byte) (*mqbridge.PublishResult, error) {
 	p.messages = append(p.messages, msg)
-	return nil
+	return &mqbridge.PublishResult{Destination: p.destination}, nil
 }
 
+func (p *mockPublisher) Type() string { return p.typeName }
 func (p *mockPublisher) Close() error { return nil }
 
 // failingPublisher always returns an error.
-type failingPublisher struct{}
-
-func (p *failingPublisher) Publish(_ context.Context, _ []byte) error {
-	return fmt.Errorf("publish failed")
+type failingPublisher struct {
+	typeName string
 }
 
+func (p *failingPublisher) Publish(_ context.Context, _ []byte) (*mqbridge.PublishResult, error) {
+	return nil, fmt.Errorf("publish failed")
+}
+
+func (p *failingPublisher) Type() string { return p.typeName }
 func (p *failingPublisher) Close() error { return nil }
 
 func setupTestMeterProvider(t *testing.T) *sdkmetric.ManualReader {
@@ -126,9 +132,8 @@ func TestMetricsSingleDestination(t *testing.T) {
 
 	bridge := mqbridge.NewBridgeForTest(
 		&mockSubscriber{messages: [][]byte{[]byte("msg1"), []byte("msg2"), []byte("msg3")}},
-		[]mqbridge.Publisher{&mockPublisher{}},
+		[]mqbridge.Publisher{&mockPublisher{destination: "dest-queue", typeName: "simplemq"}},
 		"rabbitmq", "test-queue",
-		[]mqbridge.DestinationInfo{{Type: "simplemq", Queue: "dest-queue"}},
 	)
 
 	ctx, cancel := context.WithCancel(t.Context())
@@ -156,6 +161,15 @@ func TestMetricsSingleDestination(t *testing.T) {
 		t.Errorf("messages.published: got %d, want 3", got)
 	}
 
+	// Verify destination attributes
+	dstAttrs := attribute.NewSet(
+		attribute.String("destination_type", "simplemq"),
+		attribute.String("destination_queue", "dest-queue"),
+	)
+	if got := int64DataPointsWithAttrs(published, dstAttrs); got != 3 {
+		t.Errorf("messages.published with dest attrs: got %d, want 3", got)
+	}
+
 	errors := findMetric(rm, "mqbridge.messages.errors")
 	if got := sumInt64(errors); got != 0 {
 		t.Errorf("messages.errors: got %d, want 0", got)
@@ -170,19 +184,14 @@ func TestMetricsSingleDestination(t *testing.T) {
 func TestMetricsFanout(t *testing.T) {
 	reader := setupTestMeterProvider(t)
 
-	pub1 := &mockPublisher{}
-	pub2 := &mockPublisher{}
-	pub3 := &mockPublisher{}
+	pub1 := &mockPublisher{destination: "dest-1", typeName: "simplemq"}
+	pub2 := &mockPublisher{destination: "dest-2", typeName: "simplemq"}
+	pub3 := &mockPublisher{destination: "dest-3", typeName: "simplemq"}
 
 	bridge := mqbridge.NewBridgeForTest(
 		&mockSubscriber{messages: [][]byte{[]byte("msg1"), []byte("msg2")}},
 		[]mqbridge.Publisher{pub1, pub2, pub3},
 		"rabbitmq", "src-queue",
-		[]mqbridge.DestinationInfo{
-			{Type: "simplemq", Queue: "dest-1"},
-			{Type: "simplemq", Queue: "dest-2"},
-			{Type: "simplemq", Queue: "dest-3"},
-		},
 	)
 
 	ctx, cancel := context.WithCancel(t.Context())
@@ -232,9 +241,8 @@ func TestMetricsPublishError(t *testing.T) {
 
 	bridge := mqbridge.NewBridgeForTest(
 		&mockSubscriber{messages: [][]byte{[]byte("msg1")}},
-		[]mqbridge.Publisher{&failingPublisher{}},
+		[]mqbridge.Publisher{&failingPublisher{typeName: "rabbitmq"}},
 		"simplemq", "src-queue",
-		[]mqbridge.DestinationInfo{{Type: "rabbitmq", Queue: ""}},
 	)
 
 	ctx, cancel := context.WithCancel(t.Context())

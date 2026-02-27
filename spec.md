@@ -130,6 +130,10 @@ mqbridge supports OpenTelemetry metrics for observability. Metrics are auto-enab
 | `mqbridge.messages.errors` | Int64Counter | Message processing errors | source_type, source_queue |
 | `mqbridge.message.processing.duration` | Float64Histogram | Time from receive to all publishes done (seconds) | source_type, source_queue |
 
+- `source_type` / `destination_type`: `rabbitmq` or `simplemq`
+- `source_queue`: source queue name from config
+- `destination_queue`: SimpleMQ queue name, or `exchange/routing_key` for RabbitMQ (determined dynamically from each message)
+
 ### Configuration
 
 Metrics are configured via standard OpenTelemetry environment variables:
