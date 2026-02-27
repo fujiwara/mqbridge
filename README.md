@@ -58,6 +58,8 @@ Configuration is written in Jsonnet (plain JSON is also accepted).
 local must_env = std.native('must_env');
 {
   rabbitmq: {
+    // AMQP URI: amqp://user:pass@host:port/vhost
+    // See https://www.rabbitmq.com/docs/uri-spec
     url: must_env('RABBITMQ_URL'),
   },
   simplemq: {
