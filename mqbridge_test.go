@@ -83,7 +83,7 @@ func TestRabbitMQToSimpleMQ(t *testing.T) {
 	smqServer := localserver.NewServer()
 	defer smqServer.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
 	exchangeName := fmt.Sprintf("test-exchange-%d", time.Now().UnixNano())
@@ -155,7 +155,7 @@ func TestRabbitMQToSimpleMQFanout(t *testing.T) {
 	smqServer := localserver.NewServer()
 	defer smqServer.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
 	exchangeName := fmt.Sprintf("test-fanout-exchange-%d", time.Now().UnixNano())
@@ -233,7 +233,7 @@ func TestSimpleMQToRabbitMQ(t *testing.T) {
 	smqServer := localserver.NewServer()
 	defer smqServer.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
 	inboundQueue := fmt.Sprintf("test-inbound-%d", time.Now().UnixNano())
