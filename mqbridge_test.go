@@ -53,6 +53,29 @@ func requireRabbitMQ(t *testing.T) *amqp.Connection {
 	return conn
 }
 
+func receiveOneFromSimpleMQ(t *testing.T, ctx context.Context, smqClient *message.Client, queueName string) string {
+	t.Helper()
+	for range 20 {
+		time.Sleep(200 * time.Millisecond)
+		res, err := smqClient.ReceiveMessage(ctx, message.ReceiveMessageParams{
+			QueueName: message.QueueName(queueName),
+		})
+		if err != nil {
+			continue
+		}
+		recvOK, ok := res.(*message.ReceiveMessageOK)
+		if !ok || len(recvOK.Messages) == 0 {
+			continue
+		}
+		decoded, err := base64.StdEncoding.DecodeString(string(recvOK.Messages[0].Content))
+		if err != nil {
+			t.Fatalf("failed to decode message from queue %s: %v", queueName, err)
+		}
+		return string(decoded)
+	}
+	return ""
+}
+
 func TestRabbitMQToSimpleMQ(t *testing.T) {
 	conn := requireRabbitMQ(t)
 	defer conn.Close()
@@ -60,7 +83,7 @@ func TestRabbitMQToSimpleMQ(t *testing.T) {
 	smqServer := localserver.NewServer()
 	defer smqServer.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
 	exchangeName := fmt.Sprintf("test-exchange-%d", time.Now().UnixNano())
@@ -108,7 +131,7 @@ func TestRabbitMQToSimpleMQ(t *testing.T) {
 	}
 	defer ch.Close()
 
-	testBody := "hello from rabbitmq"
+	testBody := fmt.Sprintf("msg-%s-%d", t.Name(), time.Now().UnixNano())
 	err = ch.PublishWithContext(ctx, exchangeName, "test.key", false, false, amqp.Publishing{
 		Body: []byte(testBody),
 	})
@@ -117,29 +140,87 @@ func TestRabbitMQToSimpleMQ(t *testing.T) {
 	}
 
 	smqClient := newSimpleMQTestClient(t, smqServer.URL())
-	var received string
-	for i := 0; i < 20; i++ {
-		time.Sleep(200 * time.Millisecond)
-		res, err := smqClient.ReceiveMessage(ctx, message.ReceiveMessageParams{
-			QueueName: message.QueueName(destQueue),
-		})
-		if err != nil {
-			continue
-		}
-		recvOK, ok := res.(*message.ReceiveMessageOK)
-		if !ok || len(recvOK.Messages) == 0 {
-			continue
-		}
-		decoded, err := base64.StdEncoding.DecodeString(string(recvOK.Messages[0].Content))
-		if err != nil {
-			t.Fatalf("failed to decode message: %v", err)
-		}
-		received = string(decoded)
-		break
-	}
-
+	received := receiveOneFromSimpleMQ(t, ctx, smqClient, destQueue)
 	if received != testBody {
 		t.Errorf("expected %q, got %q", testBody, received)
+	}
+
+	bridgeCancel()
+}
+
+func TestRabbitMQToSimpleMQFanout(t *testing.T) {
+	conn := requireRabbitMQ(t)
+	defer conn.Close()
+
+	smqServer := localserver.NewServer()
+	defer smqServer.Close()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	exchangeName := fmt.Sprintf("test-fanout-exchange-%d", time.Now().UnixNano())
+	queueName := fmt.Sprintf("test-fanout-queue-%d", time.Now().UnixNano())
+	destQueue1 := fmt.Sprintf("test-fanout-dest1-%d", time.Now().UnixNano())
+	destQueue2 := fmt.Sprintf("test-fanout-dest2-%d", time.Now().UnixNano())
+	destQueue3 := fmt.Sprintf("test-fanout-dest3-%d", time.Now().UnixNano())
+
+	cfg := &mqbridge.Config{
+		RabbitMQ: mqbridge.RabbitMQConfig{URL: testRabbitMQURL},
+		SimpleMQ: mqbridge.SimpleMQConfig{APIURL: smqServer.URL()},
+		Bridges: []mqbridge.BridgeConfig{
+			{
+				From: mqbridge.FromConfig{
+					RabbitMQ: &mqbridge.FromRabbitMQConfig{
+						Queue:        queueName,
+						Exchange:     exchangeName,
+						ExchangeType: "topic",
+						RoutingKey:   "#",
+					},
+				},
+				To: []mqbridge.ToConfig{
+					{SimpleMQ: &mqbridge.ToSimpleMQConfig{Queue: destQueue1, APIKey: testAPIKey}},
+					{SimpleMQ: &mqbridge.ToSimpleMQConfig{Queue: destQueue2, APIKey: testAPIKey}},
+					{SimpleMQ: &mqbridge.ToSimpleMQConfig{Queue: destQueue3, APIKey: testAPIKey}},
+				},
+			},
+		},
+	}
+
+	app, err := mqbridge.New(cfg)
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+
+	bridgeCtx, bridgeCancel := context.WithCancel(ctx)
+	defer bridgeCancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- app.Run(bridgeCtx)
+	}()
+
+	time.Sleep(500 * time.Millisecond)
+
+	ch, err := conn.Channel()
+	if err != nil {
+		t.Fatalf("failed to open channel: %v", err)
+	}
+	defer ch.Close()
+
+	testBody := fmt.Sprintf("msg-%s-%d", t.Name(), time.Now().UnixNano())
+	err = ch.PublishWithContext(ctx, exchangeName, "test.key", false, false, amqp.Publishing{
+		Body: []byte(testBody),
+	})
+	if err != nil {
+		t.Fatalf("failed to publish: %v", err)
+	}
+
+	smqClient := newSimpleMQTestClient(t, smqServer.URL())
+	for _, dq := range []string{destQueue1, destQueue2, destQueue3} {
+		received := receiveOneFromSimpleMQ(t, ctx, smqClient, dq)
+		if received != testBody {
+			t.Errorf("queue %s: expected %q, got %q", dq, testBody, received)
+		}
 	}
 
 	bridgeCancel()
@@ -152,7 +233,7 @@ func TestSimpleMQToRabbitMQ(t *testing.T) {
 	smqServer := localserver.NewServer()
 	defer smqServer.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
 	inboundQueue := fmt.Sprintf("test-inbound-%d", time.Now().UnixNano())
@@ -217,7 +298,7 @@ func TestSimpleMQToRabbitMQ(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond)
 
-	testBody := "hello from simplemq"
+	testBody := fmt.Sprintf("msg-%s-%d", t.Name(), time.Now().UnixNano())
 	rmqMsg := mqbridge.RabbitMQMessage{
 		Exchange:   destExchange,
 		RoutingKey: "test.key",

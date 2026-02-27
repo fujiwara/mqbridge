@@ -1,7 +1,6 @@
 package mqbridge_test
 
 import (
-	"context"
 	"encoding/json"
 	"testing"
 
@@ -9,7 +8,7 @@ import (
 )
 
 func TestLoadConfig(t *testing.T) {
-	cfg, err := mqbridge.LoadConfig(context.Background(), "testdata/config.jsonnet")
+	cfg, err := mqbridge.LoadConfig(t.Context(), "testdata/config.jsonnet")
 	if err != nil {
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
@@ -28,7 +27,7 @@ func TestLoadConfig(t *testing.T) {
 }
 
 func TestRenderConfig(t *testing.T) {
-	data, err := mqbridge.RenderConfig(context.Background(), "testdata/config.jsonnet")
+	data, err := mqbridge.RenderConfig(t.Context(), "testdata/config.jsonnet")
 	if err != nil {
 		t.Fatalf("RenderConfig failed: %v", err)
 	}
