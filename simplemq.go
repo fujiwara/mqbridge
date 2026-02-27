@@ -7,10 +7,9 @@ import (
 	"log/slog"
 	"time"
 
+	simplemq "github.com/sacloud/simplemq-api-go"
 	"github.com/sacloud/simplemq-api-go/apis/v1/message"
 )
-
-const defaultSimpleMQAPIURL = "https://simplemq.tk1b.api.sacloud.jp"
 
 // apiKeySource implements message.SecuritySource.
 type apiKeySource struct {
@@ -23,7 +22,7 @@ func (s *apiKeySource) ApiKeyAuth(_ context.Context, _ message.OperationName) (m
 
 func newSimpleMQClient(apiURL, apiKey string) (*message.Client, error) {
 	if apiURL == "" {
-		apiURL = defaultSimpleMQAPIURL
+		apiURL = simplemq.DefaultMessageAPIRootURL
 	}
 	return message.NewClient(apiURL, &apiKeySource{apiKey: apiKey})
 }
