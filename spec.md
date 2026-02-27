@@ -98,6 +98,7 @@ Commands:
 Flags:
   --config, -c    Config file path (Jsonnet/JSON) (required) [$MQBRIDGE_CONFIG]
   --log-format    Log format: text (default, colored with source) or json [$MQBRIDGE_LOG_FORMAT]
+  --log-level     Log level: debug, info (default), warn, error [$MQBRIDGE_LOG_LEVEL]
   --version       Show version
   --help          Show help
 ```
@@ -106,6 +107,7 @@ Flags:
 type CLI struct {
     Config    string           `kong:"required,short='c',env='MQBRIDGE_CONFIG',help='Config file path'"`
     LogFormat string           `kong:"default='text',enum='text,json',env='MQBRIDGE_LOG_FORMAT',help='Log format (text or json)'"`
+    LogLevel  string           `kong:"default='info',enum='debug,info,warn,error',env='MQBRIDGE_LOG_LEVEL',help='Log level (debug, info, warn, error)'"`
     Run       RunCmd           `cmd:"" help:"Run the bridge"`
     Validate  ValidateCmd      `cmd:"" help:"Validate config"`
     Render    RenderCmd        `cmd:"" help:"Render config as JSON to stdout"`

@@ -36,6 +36,8 @@ type Bridge struct {
 	To       []Publisher
 	metrics  *Metrics
 	srcAttrs attribute.Set
+	srcType  string
+	srcQueue string
 }
 
 // Run starts the bridge, consuming messages from the subscriber
@@ -43,11 +45,20 @@ type Bridge struct {
 func (b *Bridge) Run(ctx context.Context) error {
 	return b.From.Subscribe(ctx, func(ctx context.Context, msg []byte) error {
 		b.metrics.messagesReceived.Add(ctx, 1, metric.WithAttributeSet(b.srcAttrs))
+		slog.Debug("message received",
+			"source_type", b.srcType,
+			"source_queue", b.srcQueue,
+			"size", len(msg),
+		)
 		start := time.Now()
 		for _, pub := range b.To {
 			result, err := pub.Publish(ctx, msg)
 			if err != nil {
 				b.metrics.messageErrors.Add(ctx, 1, metric.WithAttributeSet(b.srcAttrs))
+				slog.Error("failed to publish message",
+					"destination_type", pub.Type(),
+					"error", err,
+				)
 				return fmt.Errorf("publish error: %w", err)
 			}
 			dstAttrs := attribute.NewSet(
@@ -55,6 +66,10 @@ func (b *Bridge) Run(ctx context.Context) error {
 				attribute.String("destination_queue", result.Destination),
 			)
 			b.metrics.messagesPublished.Add(ctx, 1, metric.WithAttributeSet(dstAttrs))
+			slog.Debug("message published",
+				"destination_type", pub.Type(),
+				"destination_queue", result.Destination,
+			)
 		}
 		b.metrics.processingDuration.Record(ctx, time.Since(start).Seconds(), metric.WithAttributeSet(b.srcAttrs))
 		return nil
@@ -150,6 +165,8 @@ func NewBridgeForTest(sub Subscriber, pubs []Publisher, srcType, srcQueue string
 		To:       pubs,
 		metrics:  m,
 		srcAttrs: srcAttrs,
+		srcType:  srcType,
+		srcQueue: srcQueue,
 	}
 }
 
@@ -210,5 +227,7 @@ func buildBridge(cfg *Config, bc BridgeConfig, m *Metrics) (*Bridge, error) {
 		To:       pubs,
 		metrics:  m,
 		srcAttrs: srcAttrs,
+		srcType:  srcType,
+		srcQueue: srcQueue,
 	}, nil
 }

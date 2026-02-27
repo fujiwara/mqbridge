@@ -228,5 +228,6 @@ func (p *RabbitMQPublisher) ensureConnected() error {
 	}
 	p.conn = conn
 	p.ch = ch
+	slog.Info("RabbitMQ publisher connected")
 	return nil
 }

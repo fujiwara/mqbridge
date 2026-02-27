@@ -28,6 +28,7 @@ Commands:
 Flags:
   --config, -c    Config file path (Jsonnet/JSON) (required) [$MQBRIDGE_CONFIG]
   --log-format    Log format: text (default, colored with source) or json [$MQBRIDGE_LOG_FORMAT]
+  --log-level     Log level: debug, info (default), warn, error [$MQBRIDGE_LOG_LEVEL]
   --version       Show version
   --help          Show help
 ```

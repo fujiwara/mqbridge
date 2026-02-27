@@ -16,6 +16,7 @@ import (
 type CLI struct {
 	Config    string           `kong:"required,short='c',env='MQBRIDGE_CONFIG',help='Config file path (Jsonnet/JSON)'" `
 	LogFormat string           `kong:"default='text',enum='text,json',env='MQBRIDGE_LOG_FORMAT',help='Log format (text or json)'" `
+	LogLevel  string           `kong:"default='info',enum='debug,info,warn,error',env='MQBRIDGE_LOG_LEVEL',help='Log level (debug, info, warn, error)'" `
 	Run       RunCmd           `cmd:"" help:"Run the bridge"`
 	Validate  ValidateCmd      `cmd:"" help:"Validate config"`
 	Render    RenderCmd        `cmd:"" help:"Render config as JSON to stdout"`
@@ -31,7 +32,7 @@ func RunCLI(ctx context.Context) error {
 		kong.Vars{"version": Version},
 		kong.BindTo(ctx, (*context.Context)(nil)),
 	)
-	setupLogger(cli.LogFormat)
+	setupLogger(cli.LogFormat, cli.LogLevel)
 	shutdownMetrics, err := setupMeterProvider(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to setup meter provider: %w", err)
@@ -80,14 +81,28 @@ func (c *RenderCmd) Run(ctx context.Context, globals *CLI) error {
 	return RenderConfigTo(ctx, globals.Config, os.Stdout)
 }
 
-func setupLogger(format string) {
+func parseLogLevel(level string) slog.Level {
+	switch level {
+	case "debug":
+		return slog.LevelDebug
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
+}
+
+func setupLogger(format, level string) {
+	logLevel := parseLogLevel(level)
 	var handler slog.Handler
 	switch format {
 	case "json":
-		handler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{AddSource: true})
+		handler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{AddSource: true, Level: logLevel})
 	default:
 		handler = sloghandler.NewLogHandler(os.Stderr, &sloghandler.HandlerOptions{
-			HandlerOptions: slog.HandlerOptions{Level: slog.LevelInfo},
+			HandlerOptions: slog.HandlerOptions{Level: logLevel},
 			Color:          true,
 			Source:         true,
 		})
