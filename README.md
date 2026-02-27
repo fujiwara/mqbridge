@@ -12,7 +12,7 @@ A message bridge between RabbitMQ and SimpleMQ. Define multiple forwarding rules
 - **OpenTelemetry metrics**: Built-in metrics (received, published, errors, duration) auto-enabled via `OTEL_EXPORTER_OTLP_ENDPOINT`.
 - **Structured logging**: Text (colored) or JSON format with configurable log level.
 - **Jsonnet configuration**: Use [jsonnet-armed](https://github.com/fujiwara/jsonnet-armed) for configuration with environment variable support (`env()`, `must_env()`).
-- **Secret Manager integration**: Retrieve credentials from [Sakura Cloud Secret Manager](https://manual.sakura.ad.jp/cloud/manual-secret-manager.html) using `secret()` native function in Jsonnet.
+- **Secret Manager integration**: Retrieve credentials from [Sakura Cloud Secret Manager](https://manual.sakura.ad.jp/cloud/appliance/secretsmanager/index.html) using `secret()` native function in Jsonnet.
 
 ## Installation
 
