@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.0.2](https://github.com/fujiwara/mqbridge/compare/v0.0.1...v0.0.2) - 2026-02-27
+- Add --log-format flag with sloghandler by @fujiwara in https://github.com/fujiwara/mqbridge/pull/5
+- Support environment variables for CLI flags by @fujiwara in https://github.com/fujiwara/mqbridge/pull/7
+- Add OpenTelemetry metrics support by @fujiwara in https://github.com/fujiwara/mqbridge/pull/8
+- Add per-bridge logger and subscriber reconnection by @fujiwara in https://github.com/fujiwara/mqbridge/pull/9
+- Update README with install methods and feature list by @fujiwara in https://github.com/fujiwara/mqbridge/pull/10
+
 ## [v0.0.1](https://github.com/fujiwara/mqbridge/commits/v0.0.1) - 2026-02-27
 - Implement mqbridge: RabbitMQ <-> SimpleMQ message bridge by @fujiwara in https://github.com/fujiwara/mqbridge/pull/1
 - Improvements: CI, test coverage, code quality by @fujiwara in https://github.com/fujiwara/mqbridge/pull/2
