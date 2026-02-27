@@ -96,16 +96,16 @@ Commands:
   render      Render config as JSON to stdout
 
 Flags:
-  --config, -c    Config file path (Jsonnet/JSON) (required)
-  --log-format    Log format: text (default, colored with source) or json
+  --config, -c    Config file path (Jsonnet/JSON) (required) [$MQBRIDGE_CONFIG]
+  --log-format    Log format: text (default, colored with source) or json [$MQBRIDGE_LOG_FORMAT]
   --version       Show version
   --help          Show help
 ```
 
 ```go
 type CLI struct {
-    Config    string           `kong:"required,short='c',help='Config file path'"`
-    LogFormat string           `kong:"default='text',enum='text,json',help='Log format (text or json)'"`
+    Config    string           `kong:"required,short='c',env='MQBRIDGE_CONFIG',help='Config file path'"`
+    LogFormat string           `kong:"default='text',enum='text,json',env='MQBRIDGE_LOG_FORMAT',help='Log format (text or json)'"`
     Run       RunCmd           `cmd:"" help:"Run the bridge"`
     Validate  ValidateCmd      `cmd:"" help:"Validate config"`
     Render    RenderCmd        `cmd:"" help:"Render config as JSON to stdout"`

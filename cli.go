@@ -14,8 +14,8 @@ import (
 
 // CLI defines the command-line interface for mqbridge.
 type CLI struct {
-	Config    string           `kong:"required,short='c',help='Config file path (Jsonnet/JSON)'" `
-	LogFormat string           `kong:"default='text',enum='text,json',help='Log format (text or json)'" `
+	Config    string           `kong:"required,short='c',env='MQBRIDGE_CONFIG',help='Config file path (Jsonnet/JSON)'" `
+	LogFormat string           `kong:"default='text',enum='text,json',env='MQBRIDGE_LOG_FORMAT',help='Log format (text or json)'" `
 	Run       RunCmd           `cmd:"" help:"Run the bridge"`
 	Validate  ValidateCmd      `cmd:"" help:"Validate config"`
 	Render    RenderCmd        `cmd:"" help:"Render config as JSON to stdout"`
