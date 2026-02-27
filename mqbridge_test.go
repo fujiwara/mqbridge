@@ -131,7 +131,7 @@ func TestRabbitMQToSimpleMQ(t *testing.T) {
 	}
 	defer ch.Close()
 
-	testBody := "hello from rabbitmq"
+	testBody := fmt.Sprintf("msg-%s-%d", t.Name(), time.Now().UnixNano())
 	err = ch.PublishWithContext(ctx, exchangeName, "test.key", false, false, amqp.Publishing{
 		Body: []byte(testBody),
 	})
@@ -207,7 +207,7 @@ func TestRabbitMQToSimpleMQFanout(t *testing.T) {
 	}
 	defer ch.Close()
 
-	testBody := "fanout message"
+	testBody := fmt.Sprintf("msg-%s-%d", t.Name(), time.Now().UnixNano())
 	err = ch.PublishWithContext(ctx, exchangeName, "test.key", false, false, amqp.Publishing{
 		Body: []byte(testBody),
 	})
@@ -298,7 +298,7 @@ func TestSimpleMQToRabbitMQ(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond)
 
-	testBody := "hello from simplemq"
+	testBody := fmt.Sprintf("msg-%s-%d", t.Name(), time.Now().UnixNano())
 	rmqMsg := mqbridge.RabbitMQMessage{
 		Exchange:   destExchange,
 		RoutingKey: "test.key",
