@@ -55,9 +55,10 @@ Flags:
 Configuration is written in Jsonnet (plain JSON is also accepted).
 
 ```jsonnet
+local must_env = std.native('must_env');
 {
   rabbitmq: {
-    url: std.native('must_env')('RABBITMQ_URL'),
+    url: must_env('RABBITMQ_URL'),
   },
   simplemq: {
     api_url: 'http://localhost:18080',  // optional, default: official endpoint
@@ -75,8 +76,8 @@ Configuration is written in Jsonnet (plain JSON is also accepted).
         },
       },
       to: [
-        { simplemq: { queue: 'dest-queue-1', api_key: std.native('must_env')('SIMPLEMQ_API_KEY_1') } },
-        { simplemq: { queue: 'dest-queue-2', api_key: std.native('must_env')('SIMPLEMQ_API_KEY_2') } },
+        { simplemq: { queue: 'dest-queue-1', api_key: must_env('SIMPLEMQ_API_KEY_1') } },
+        { simplemq: { queue: 'dest-queue-2', api_key: must_env('SIMPLEMQ_API_KEY_2') } },
       ],
     },
     {
@@ -85,7 +86,7 @@ Configuration is written in Jsonnet (plain JSON is also accepted).
       from: {
         simplemq: {
           queue: 'inbound-queue',
-          api_key: std.native('must_env')('SIMPLEMQ_API_KEY_INBOUND'),
+          api_key: must_env('SIMPLEMQ_API_KEY_INBOUND'),
           polling_interval: '1s',  // default: 1s
         },
       },
@@ -108,10 +109,11 @@ secret('vault-id', 'name:1')    // specific version
 ```
 
 ```jsonnet
+local must_env = std.native('must_env');
 local secret = std.native('secret');
 {
   rabbitmq: {
-    url: std.native('must_env')('RABBITMQ_URL'),
+    url: must_env('RABBITMQ_URL'),
   },
   bridges: [
     {
