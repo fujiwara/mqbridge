@@ -28,6 +28,7 @@ Commands:
 Flags:
   --config, -c    Config file path (Jsonnet/JSON) (required) [$MQBRIDGE_CONFIG]
   --log-format    Log format: text (default, colored with source) or json [$MQBRIDGE_LOG_FORMAT]
+  --log-level     Log level: debug, info (default), warn, error [$MQBRIDGE_LOG_LEVEL]
   --version       Show version
   --help          Show help
 ```
@@ -132,6 +133,27 @@ Messages from SimpleMQ to RabbitMQ must be in the following JSON format:
 - `exchange` and `routing_key` are required.
 - `headers` is optional.
 - The content of `body` is published to RabbitMQ.
+
+## Metrics
+
+mqbridge supports [OpenTelemetry](https://opentelemetry.io/) metrics. Metrics are auto-enabled when the `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable is set. When not set, metrics are disabled with zero overhead.
+
+```console
+$ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 mqbridge run -c config.jsonnet
+```
+
+The following metrics are exported:
+
+| Metric | Type | Description | Attributes |
+|--------|------|-------------|------------|
+| `mqbridge.messages.received` | Counter | Messages received from subscriber | `source_type`, `source_queue` |
+| `mqbridge.messages.published` | Counter | Messages published to destination | `destination_type`, `destination_queue` |
+| `mqbridge.messages.errors` | Counter | Message processing errors | `source_type`, `source_queue` |
+| `mqbridge.message.processing.duration` | Histogram | Processing duration in seconds | `source_type`, `source_queue` |
+
+Attribute values are derived from the bridge configuration and message content. `source_type` / `destination_type` is `rabbitmq` or `simplemq`. `source_queue` is the source queue name. `destination_queue` is the SimpleMQ queue name, or the exchange name for RabbitMQ (from each message).
+
+Both HTTP and gRPC protocols are supported. Set `OTEL_EXPORTER_OTLP_PROTOCOL` to `grpc` for gRPC transport (default: `http/protobuf`). All standard `OTEL_*` environment variables are supported.
 
 ## LICENSE
 

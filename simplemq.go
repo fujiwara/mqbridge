@@ -127,20 +127,23 @@ func NewSimpleMQPublisher(apiURL string, config ToSimpleMQConfig) (*SimpleMQPubl
 
 // Publish sends a message to the SimpleMQ queue.
 // The message body is base64-encoded before sending.
-func (p *SimpleMQPublisher) Publish(ctx context.Context, msg []byte) error {
+func (p *SimpleMQPublisher) Publish(ctx context.Context, msg []byte) (*PublishResult, error) {
 	encoded := base64.StdEncoding.EncodeToString(msg)
 	res, err := p.client.SendMessage(ctx,
 		&message.SendRequest{Content: message.MessageContent(encoded)},
 		message.SendMessageParams{QueueName: message.QueueName(p.queueName)},
 	)
 	if err != nil {
-		return fmt.Errorf("failed to send message to SimpleMQ queue %q: %w", p.queueName, err)
+		return nil, fmt.Errorf("failed to send message to SimpleMQ queue %q: %w", p.queueName, err)
 	}
 	if _, ok := res.(*message.SendMessageOK); !ok {
-		return fmt.Errorf("unexpected response type from SimpleMQ: %T", res)
+		return nil, fmt.Errorf("unexpected response type from SimpleMQ: %T", res)
 	}
-	return nil
+	return &PublishResult{Destination: p.queueName}, nil
 }
+
+// Type returns the publisher type name.
+func (p *SimpleMQPublisher) Type() string { return "simplemq" }
 
 // Close is a no-op for SimpleMQPublisher.
 func (p *SimpleMQPublisher) Close() error {

@@ -159,19 +159,19 @@ func NewRabbitMQPublisher(url string) *RabbitMQPublisher {
 }
 
 // Publish parses the message JSON and publishes to the specified exchange/routing key.
-func (p *RabbitMQPublisher) Publish(ctx context.Context, msg []byte) error {
+func (p *RabbitMQPublisher) Publish(ctx context.Context, msg []byte) (*PublishResult, error) {
 	if err := p.ensureConnected(); err != nil {
-		return err
+		return nil, err
 	}
 	rmqMsg, err := ParseRabbitMQMessage(msg)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	headers := make(amqp.Table)
 	for k, v := range rmqMsg.Headers {
 		headers[k] = v
 	}
-	return p.ch.PublishWithContext(
+	if err := p.ch.PublishWithContext(
 		ctx,
 		rmqMsg.Exchange,
 		rmqMsg.RoutingKey,
@@ -183,8 +183,16 @@ func (p *RabbitMQPublisher) Publish(ctx context.Context, msg []byte) error {
 			DeliveryMode: amqp.Persistent,
 			Timestamp:    time.Now(),
 		},
-	)
+	); err != nil {
+		return nil, err
+	}
+	return &PublishResult{
+		Destination: rmqMsg.Exchange,
+	}, nil
 }
+
+// Type returns the publisher type name.
+func (p *RabbitMQPublisher) Type() string { return "rabbitmq" }
 
 // Close closes the RabbitMQ connection.
 func (p *RabbitMQPublisher) Close() error {
@@ -220,5 +228,6 @@ func (p *RabbitMQPublisher) ensureConnected() error {
 	}
 	p.conn = conn
 	p.ch = ch
+	slog.Info("RabbitMQ publisher connected")
 	return nil
 }

@@ -98,6 +98,7 @@ Commands:
 Flags:
   --config, -c    Config file path (Jsonnet/JSON) (required) [$MQBRIDGE_CONFIG]
   --log-format    Log format: text (default, colored with source) or json [$MQBRIDGE_LOG_FORMAT]
+  --log-level     Log level: debug, info (default), warn, error [$MQBRIDGE_LOG_LEVEL]
   --version       Show version
   --help          Show help
 ```
@@ -106,6 +107,7 @@ Flags:
 type CLI struct {
     Config    string           `kong:"required,short='c',env='MQBRIDGE_CONFIG',help='Config file path'"`
     LogFormat string           `kong:"default='text',enum='text,json',env='MQBRIDGE_LOG_FORMAT',help='Log format (text or json)'"`
+    LogLevel  string           `kong:"default='info',enum='debug,info,warn,error',env='MQBRIDGE_LOG_LEVEL',help='Log level (debug, info, warn, error)'"`
     Run       RunCmd           `cmd:"" help:"Run the bridge"`
     Validate  ValidateCmd      `cmd:"" help:"Validate config"`
     Render    RenderCmd        `cmd:"" help:"Render config as JSON to stdout"`
@@ -117,7 +119,32 @@ type CLI struct {
 - `validate`: Load config and verify syntax/structure. Unknown fields cause an error.
 - `render`: Evaluate config as Jsonnet and output resulting JSON to stdout (for debugging/verification).
 
-## 5. Libraries
+## 5. Metrics
+
+mqbridge supports OpenTelemetry metrics for observability. Metrics are auto-enabled when the `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable is set.
+
+### Instruments
+
+| Metric | Type | Description | Attributes |
+|--------|------|-------------|------------|
+| `mqbridge.messages.received` | Int64Counter | Messages received from subscriber | source_type, source_queue |
+| `mqbridge.messages.published` | Int64Counter | Messages published to destination | destination_type, destination_queue |
+| `mqbridge.messages.errors` | Int64Counter | Message processing errors | source_type, source_queue |
+| `mqbridge.message.processing.duration` | Float64Histogram | Time from receive to all publishes done (seconds) | source_type, source_queue |
+
+- `source_type` / `destination_type`: `rabbitmq` or `simplemq`
+- `source_queue`: source queue name from config
+- `destination_queue`: SimpleMQ queue name, or exchange name for RabbitMQ (from each message)
+
+### Configuration
+
+Metrics are configured via standard OpenTelemetry environment variables:
+
+- `OTEL_EXPORTER_OTLP_ENDPOINT` — OTLP endpoint URL (e.g., `http://localhost:4318`). If not set, metrics are disabled (zero overhead).
+- `OTEL_EXPORTER_OTLP_HEADERS` — Additional headers for the exporter.
+- `OTEL_EXPORTER_OTLP_PROTOCOL` — Protocol: `http/protobuf` (default) or `grpc`.
+
+## 6. Libraries
 
 | Library | Purpose |
 |---------|---------|
@@ -129,25 +156,31 @@ type CLI struct {
 | `github.com/sacloud/secretmanager-api-go` | Sakura Cloud Secret Manager client |
 | `github.com/fujiwara/sakura-secrets-cli` | sakura-secrets-localserver (test) |
 | `github.com/fujiwara/sloghandler` | Structured log handler (colored text with source) |
+| `go.opentelemetry.io/otel` | OpenTelemetry API |
+| `go.opentelemetry.io/otel/sdk/metric` | OpenTelemetry metrics SDK |
+| `go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp` | OTLP HTTP metrics exporter |
+| `go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc` | OTLP gRPC metrics exporter |
 
-## 6. Package Structure
+## 7. Package Structure
 
 ```
 mqbridge/
 ├── cmd/mqbridge/main.go       # CLI entry point
 ├── mqbridge.go                # Run(), bridge orchestration
 ├── config.go                  # Config loading (jsonnet-armed)
+├── metrics.go                 # OpenTelemetry metrics instruments & setup
 ├── rabbitmq.go                # RabbitMQ subscribe/publish
 ├── secretmanager.go            # Secret Manager native function
 ├── simplemq.go                # SimpleMQ subscribe/publish
 ├── message.go                 # SimpleMQ→RabbitMQ message format
 ├── mqbridge_test.go           # Integration tests
+├── metrics_test.go            # Metrics unit tests
 ├── testdata/config.jsonnet    # Test config
 ├── docker-compose.yml         # RabbitMQ container
 └── spec.md
 ```
 
-## 7. Core Interfaces
+## 8. Core Interfaces
 
 ```go
 // Subscriber consumes messages from a source
@@ -174,20 +207,20 @@ type Bridge struct {
 - **SimpleMQSubscriber**: Receive via polling and pass messages to the handler. Delete after handler succeeds.
 - **SimpleMQPublisher**: Send message body as-is.
 
-## 8. Error Handling & Reliability
+## 9. Error Handling & Reliability
 
 - **RabbitMQ**: Reconnect with retry on connection loss.
 - **SimpleMQ**: Retry on HTTP errors.
 - **Message processing failure**: RabbitMQ uses Nack (requeue); SimpleMQ does not delete (redelivery after visibility timeout).
 - **Graceful shutdown**: On SIGTERM/SIGINT, stop all bridges and wait for in-flight messages to complete.
 
-## 9. Testing
+## 10. Testing
 
 - **RabbitMQ**: Start a standalone RabbitMQ container via `docker-compose.yml`.
 - **SimpleMQ**: Start `github.com/fujiwara/simplemq-cli` localserver package in-process.
 - **Integration test**: Start both and verify bidirectional message forwarding.
 
-## 10. Docker Compose
+## 11. Docker Compose
 
 ```yaml
 services:
