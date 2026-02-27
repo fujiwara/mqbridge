@@ -8,6 +8,7 @@ import (
 	"github.com/fujiwara/mqbridge"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric/noop"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
@@ -63,8 +64,8 @@ func setupTestMeterProvider(t *testing.T) *sdkmetric.ManualReader {
 	otel.SetMeterProvider(provider)
 	t.Cleanup(func() {
 		provider.Shutdown(t.Context())
-		// Reset to default noop provider
-		otel.SetMeterProvider(nil)
+		// Reset to noop provider so subsequent tests don't panic
+		otel.SetMeterProvider(noop.NewMeterProvider())
 	})
 	return reader
 }
