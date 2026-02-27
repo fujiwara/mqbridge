@@ -6,10 +6,27 @@ A message bridge between RabbitMQ and SimpleMQ. Define multiple forwarding rules
 
 - **RabbitMQ → SimpleMQ**: Consume from a RabbitMQ queue and forward messages to one or more SimpleMQ queues (fan-out).
 - **SimpleMQ → RabbitMQ**: Poll a SimpleMQ queue and publish messages to RabbitMQ with exchange/routing key determined by message content.
+- **Automatic reconnection**: RabbitMQ subscriber and publisher automatically reconnect with exponential backoff (1s–30s) on connection loss.
+- **Graceful shutdown**: On SIGTERM/SIGINT, waits for in-flight messages to complete before exiting.
+- **Named bridges**: Optional `name` field per bridge for readable log output.
+- **OpenTelemetry metrics**: Built-in metrics (received, published, errors, duration) auto-enabled via `OTEL_EXPORTER_OTLP_ENDPOINT`.
+- **Structured logging**: Text (colored) or JSON format with configurable log level.
 - **Jsonnet configuration**: Use [jsonnet-armed](https://github.com/fujiwara/jsonnet-armed) for configuration with environment variable support (`env()`, `must_env()`).
-- **Secret Manager integration**: Retrieve credentials from [Sakura Cloud Secret Manager](https://manual.sakura.ad.jp/cloud/manual-secret-manager.html) using `secret()` native function in Jsonnet.
+- **Secret Manager integration**: Retrieve credentials from [Sakura Cloud Secret Manager](https://manual.sakura.ad.jp/cloud/appliance/secretsmanager/index.html) using `secret()` native function in Jsonnet.
 
 ## Installation
+
+### Homebrew
+
+```console
+$ brew install fujiwara/tap/mqbridge
+```
+
+### Binary releases
+
+Download the latest binary from [GitHub Releases](https://github.com/fujiwara/mqbridge/releases).
+
+### Go install
 
 ```console
 $ go install github.com/fujiwara/mqbridge/cmd/mqbridge@latest
@@ -38,9 +55,12 @@ Flags:
 Configuration is written in Jsonnet (plain JSON is also accepted).
 
 ```jsonnet
+local must_env = std.native('must_env');
 {
   rabbitmq: {
-    url: std.native('must_env')('RABBITMQ_URL'),
+    // AMQP URI: amqp://user:pass@host:port/vhost
+    // See https://www.rabbitmq.com/docs/uri-spec
+    url: must_env('RABBITMQ_URL'),
   },
   simplemq: {
     api_url: 'http://localhost:18080',  // optional, default: official endpoint
@@ -58,8 +78,8 @@ Configuration is written in Jsonnet (plain JSON is also accepted).
         },
       },
       to: [
-        { simplemq: { queue: 'dest-queue-1', api_key: std.native('must_env')('SIMPLEMQ_API_KEY_1') } },
-        { simplemq: { queue: 'dest-queue-2', api_key: std.native('must_env')('SIMPLEMQ_API_KEY_2') } },
+        { simplemq: { queue: 'dest-queue-1', api_key: must_env('SIMPLEMQ_API_KEY_1') } },
+        { simplemq: { queue: 'dest-queue-2', api_key: must_env('SIMPLEMQ_API_KEY_2') } },
       ],
     },
     {
@@ -68,7 +88,7 @@ Configuration is written in Jsonnet (plain JSON is also accepted).
       from: {
         simplemq: {
           queue: 'inbound-queue',
-          api_key: std.native('must_env')('SIMPLEMQ_API_KEY_INBOUND'),
+          api_key: must_env('SIMPLEMQ_API_KEY_INBOUND'),
           polling_interval: '1s',  // default: 1s
         },
       },
@@ -91,10 +111,11 @@ secret('vault-id', 'name:1')    // specific version
 ```
 
 ```jsonnet
+local must_env = std.native('must_env');
 local secret = std.native('secret');
 {
   rabbitmq: {
-    url: std.native('must_env')('RABBITMQ_URL'),
+    url: must_env('RABBITMQ_URL'),
   },
   bridges: [
     {
