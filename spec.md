@@ -1,0 +1,192 @@
+# mqbridge Specification
+
+## 1. Overview
+
+mqbridge is a message bridge between RabbitMQ and SimpleMQ. It defines multiple forwarding rules (bridges) in a configuration file and runs them concurrently.
+
+## 2. Directions
+
+### 2.1 RabbitMQ → SimpleMQ
+
+- Consume from a RabbitMQ queue and send the message body as-is to a SimpleMQ queue.
+- Fan-out from one source to multiple SimpleMQ queues is supported.
+- Exchange/queue declaration and binding are performed on the RabbitMQ side.
+
+### 2.2 SimpleMQ → RabbitMQ
+
+- Receive from a SimpleMQ queue via polling.
+- The message body must be in the following JSON format:
+
+```json
+{
+  "exchange": "my-exchange",
+  "routing_key": "my.routing.key",
+  "headers": { "content-type": "application/json" },
+  "body": "actual message content"
+}
+```
+
+- `exchange` and `routing_key` are required. `headers` is optional.
+- The content of `body` is published to RabbitMQ.
+
+## 3. Configuration
+
+- Jsonnet format (plain JSON is also accepted).
+- Uses `github.com/fujiwara/jsonnet-armed` (`env()`, `must_env()`, etc. are available).
+
+```jsonnet
+{
+  rabbitmq: {
+    url: std.native('must_env')('RABBITMQ_URL'),
+  },
+  simplemq: {
+    api_url: 'http://localhost:18080',  // optional, for localserver. default: official endpoint
+  },
+  bridges: [
+    {
+      // RabbitMQ → SimpleMQ (fan-out)
+      from: {
+        rabbitmq: {
+          queue: 'source-queue',
+          exchange: 'source-exchange',
+          exchange_type: 'topic',   // direct, fanout, topic, headers
+          routing_key: '#',
+        },
+      },
+      to: [
+        { simplemq: { queue: 'dest-queue-1', api_key: std.native('must_env')('SIMPLEMQ_API_KEY_1') } },
+        { simplemq: { queue: 'dest-queue-2', api_key: std.native('must_env')('SIMPLEMQ_API_KEY_2') } },
+      ],
+    },
+    {
+      // SimpleMQ → RabbitMQ (routing by message content)
+      from: {
+        simplemq: {
+          queue: 'inbound-queue',
+          api_key: std.native('must_env')('SIMPLEMQ_API_KEY_INBOUND'),
+          polling_interval: '1s',  // default: 1s
+        },
+      },
+      to: [
+        { rabbitmq: {} },  // destination determined by message JSON
+      ],
+    },
+  ],
+}
+```
+
+**Note**: SimpleMQ `api_key` differs per queue, so it is specified individually on each simplemq reference (both from and to). Jsonnet variables can be used to avoid duplication:
+
+```jsonnet
+local key1 = std.native('must_env')('SIMPLEMQ_API_KEY_1');
+// ... reference key1 in multiple places
+```
+
+## 4. CLI
+
+Uses `github.com/alecthomas/kong`. Subcommand-based.
+
+```
+Usage: mqbridge <command> [flags]
+
+Commands:
+  run         Run the bridge
+  validate    Validate config (unknown fields cause error)
+  render      Render config as JSON to stdout
+
+Flags:
+  --config, -c    Config file path (Jsonnet/JSON) (required)
+  --version       Show version
+  --help          Show help
+```
+
+```go
+type CLI struct {
+    Config   string           `kong:"required,short='c',help='Config file path'"`
+    Run      RunCmd           `cmd:"" help:"Run the bridge"`
+    Validate ValidateCmd      `cmd:"" help:"Validate config"`
+    Render   RenderCmd        `cmd:"" help:"Render config as JSON to stdout"`
+    Version  kong.VersionFlag `help:"Show version"`
+}
+```
+
+- `run`: Load config and start all bridges concurrently.
+- `validate`: Load config and verify syntax/structure. Unknown fields cause an error.
+- `render`: Evaluate config as Jsonnet and output resulting JSON to stdout (for debugging/verification).
+
+## 5. Libraries
+
+| Library | Purpose |
+|---------|---------|
+| `github.com/alecthomas/kong` | CLI parser |
+| `github.com/rabbitmq/amqp091-go` | RabbitMQ AMQP client |
+| `github.com/sacloud/simplemq-api-go` | SimpleMQ API client |
+| `github.com/fujiwara/jsonnet-armed` | Jsonnet config evaluation |
+| `github.com/fujiwara/simplemq-cli` | simplemq-localserver (test) |
+
+## 6. Package Structure
+
+```
+mqbridge/
+├── cmd/mqbridge/main.go       # CLI entry point
+├── mqbridge.go                # Run(), bridge orchestration
+├── config.go                  # Config loading (jsonnet-armed)
+├── rabbitmq.go                # RabbitMQ subscribe/publish
+├── simplemq.go                # SimpleMQ subscribe/publish
+├── message.go                 # SimpleMQ→RabbitMQ message format
+├── mqbridge_test.go           # Integration tests
+├── testdata/config.jsonnet    # Test config
+├── docker-compose.yml         # RabbitMQ container
+└── spec.md
+```
+
+## 7. Core Interfaces
+
+```go
+// Subscriber consumes messages from a source
+type Subscriber interface {
+    Subscribe(ctx context.Context, handler func(ctx context.Context, msg []byte) error) error
+    Close() error
+}
+
+// Publisher sends messages to a destination
+type Publisher interface {
+    Publish(ctx context.Context, msg []byte) error
+    Close() error
+}
+
+// Bridge connects one Subscriber to multiple Publishers
+type Bridge struct {
+    From Subscriber
+    To   []Publisher
+}
+```
+
+- **RabbitMQSubscriber**: Consume from a queue and pass messages to the handler. Ack after handler succeeds.
+- **RabbitMQPublisher**: Parse JSON received from SimpleMQ and publish to the specified destination.
+- **SimpleMQSubscriber**: Receive via polling and pass messages to the handler. Delete after handler succeeds.
+- **SimpleMQPublisher**: Send message body as-is.
+
+## 8. Error Handling & Reliability
+
+- **RabbitMQ**: Reconnect with retry on connection loss.
+- **SimpleMQ**: Retry on HTTP errors.
+- **Message processing failure**: RabbitMQ uses Nack (requeue); SimpleMQ does not delete (redelivery after visibility timeout).
+- **Graceful shutdown**: On SIGTERM/SIGINT, stop all bridges and wait for in-flight messages to complete.
+
+## 9. Testing
+
+- **RabbitMQ**: Start a standalone RabbitMQ container via `docker-compose.yml`.
+- **SimpleMQ**: Start `github.com/fujiwara/simplemq-cli` localserver package in-process.
+- **Integration test**: Start both and verify bidirectional message forwarding.
+
+## 10. Docker Compose
+
+```yaml
+services:
+  rabbitmq:
+    image: rabbitmq:4-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+```
