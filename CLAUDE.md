@@ -36,6 +36,13 @@ go fmt ./...
 - SimpleMQ default API URL comes from `simplemq.DefaultMessageAPIRootURL` (SDK), not hardcoded
 - Config uses Jsonnet (`jsonnet-armed`), unknown fields cause error on validate
 
+## Tips
+
+- Use `t.Context()` in tests instead of `context.Background()`
+- Run `go fix ./...` before commit to apply automatic modernizations (e.g. range over int)
+- Constants and default values should come from upstream SDK when available, not be hardcoded
+- When adding a new feature, add tests that cover both single and multiple destinations (fan-out)
+
 ## Dependencies
 
 | Library | Purpose |
