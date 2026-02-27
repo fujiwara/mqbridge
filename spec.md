@@ -33,6 +33,7 @@ mqbridge is a message bridge between RabbitMQ and SimpleMQ. It defines multiple 
 
 - Jsonnet format (plain JSON is also accepted).
 - Uses `github.com/fujiwara/jsonnet-armed` (`env()`, `must_env()`, etc. are available).
+- `secret(vault_id, name)`: Retrieve a secret value from Sakura Cloud Secret Manager. Requires `SAKURA_ACCESS_TOKEN` and `SAKURA_ACCESS_TOKEN_SECRET` environment variables. The `name` parameter accepts an optional version suffix: `"name"` for latest, `"name:1"` for a specific version.
 
 ```jsonnet
 {
@@ -123,6 +124,8 @@ type CLI struct {
 | `github.com/sacloud/simplemq-api-go` | SimpleMQ API client |
 | `github.com/fujiwara/jsonnet-armed` | Jsonnet config evaluation |
 | `github.com/fujiwara/simplemq-cli` | simplemq-localserver (test) |
+| `github.com/sacloud/secretmanager-api-go` | Sakura Cloud Secret Manager client |
+| `github.com/fujiwara/sakura-secrets-cli` | sakura-secrets-localserver (test) |
 
 ## 6. Package Structure
 
@@ -132,6 +135,7 @@ mqbridge/
 ├── mqbridge.go                # Run(), bridge orchestration
 ├── config.go                  # Config loading (jsonnet-armed)
 ├── rabbitmq.go                # RabbitMQ subscribe/publish
+├── secretmanager.go            # Secret Manager native function
 ├── simplemq.go                # SimpleMQ subscribe/publish
 ├── message.go                 # SimpleMQ→RabbitMQ message format
 ├── mqbridge_test.go           # Integration tests

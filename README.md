@@ -7,6 +7,7 @@ A message bridge between RabbitMQ and SimpleMQ. Define multiple forwarding rules
 - **RabbitMQ → SimpleMQ**: Consume from a RabbitMQ queue and forward messages to one or more SimpleMQ queues (fan-out).
 - **SimpleMQ → RabbitMQ**: Poll a SimpleMQ queue and publish messages to RabbitMQ with exchange/routing key determined by message content.
 - **Jsonnet configuration**: Use [jsonnet-armed](https://github.com/fujiwara/jsonnet-armed) for configuration with environment variable support (`env()`, `must_env()`).
+- **Secret Manager integration**: Retrieve credentials from [Sakura Cloud Secret Manager](https://manual.sakura.ad.jp/cloud/manual-secret-manager.html) using `secret()` native function in Jsonnet.
 
 ## Installation
 
@@ -69,6 +70,45 @@ Configuration is written in Jsonnet (plain JSON is also accepted).
       },
       to: [
         { rabbitmq: {} },  // destination determined by message JSON
+      ],
+    },
+  ],
+}
+```
+
+### Secret Manager Integration
+
+You can use `secret()` native function to retrieve credentials from Sakura Cloud Secret Manager. This requires `SAKURA_ACCESS_TOKEN` and `SAKURA_ACCESS_TOKEN_SECRET` environment variables.
+
+```
+local secret = std.native('secret');
+secret('vault-id', 'name')      // latest version
+secret('vault-id', 'name:1')    // specific version
+```
+
+```jsonnet
+local secret = std.native('secret');
+{
+  rabbitmq: {
+    url: std.native('must_env')('RABBITMQ_URL'),
+  },
+  bridges: [
+    {
+      from: {
+        rabbitmq: {
+          queue: 'source-queue',
+          exchange: 'source-exchange',
+          exchange_type: 'topic',
+          routing_key: '#',
+        },
+      },
+      to: [
+        {
+          simplemq: {
+            queue: 'dest-queue',
+            api_key: secret('vault-id-xxx', 'simplemq-api-key'),
+          },
+        },
       ],
     },
   ],
