@@ -100,6 +100,7 @@ func evaluateJsonnet(ctx context.Context, path string) ([]byte, error) {
 	var buf bytes.Buffer
 	cli := &armed.CLI{Filename: path}
 	cli.SetWriter(&buf)
+	cli.AddFunctions(secretNativeFunction(ctx))
 	if err := cli.Run(ctx); err != nil {
 		return nil, err
 	}

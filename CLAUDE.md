@@ -24,6 +24,7 @@ go fmt ./...
 - `rabbitmq.go` — RabbitMQ subscriber/publisher (`amqp091-go`)
 - `simplemq.go` — SimpleMQ subscriber/publisher (`simplemq-api-go`)
 - `message.go` — SimpleMQ→RabbitMQ JSON message format
+- `secretmanager.go` — Secret Manager native function for Jsonnet
 - `cmd/mqbridge/main.go` — minimal main, just calls `mqbridge.RunCLI(ctx)`
 
 ## Conventions
@@ -52,3 +53,5 @@ go fmt ./...
 | `github.com/sacloud/simplemq-api-go` | SimpleMQ API client |
 | `github.com/fujiwara/jsonnet-armed` | Jsonnet config evaluation |
 | `github.com/fujiwara/simplemq-cli` | simplemq-localserver (test) |
+| `github.com/sacloud/secretmanager-api-go` | Sakura Cloud Secret Manager client |
+| `github.com/fujiwara/sakura-secrets-cli` | sakura-secrets-localserver (test) |
