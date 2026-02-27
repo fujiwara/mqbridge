@@ -132,7 +132,7 @@ mqbridge supports OpenTelemetry metrics for observability. Metrics are auto-enab
 
 - `source_type` / `destination_type`: `rabbitmq` or `simplemq`
 - `source_queue`: source queue name from config
-- `destination_queue`: SimpleMQ queue name, or `exchange/routing_key` for RabbitMQ (determined dynamically from each message)
+- `destination_queue`: SimpleMQ queue name, or exchange name for RabbitMQ (from each message)
 
 ### Configuration
 

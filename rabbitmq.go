@@ -187,7 +187,7 @@ func (p *RabbitMQPublisher) Publish(ctx context.Context, msg []byte) (*PublishRe
 		return nil, err
 	}
 	return &PublishResult{
-		Destination: rmqMsg.Exchange + "/" + rmqMsg.RoutingKey,
+		Destination: rmqMsg.Exchange,
 	}, nil
 }
 

@@ -150,7 +150,7 @@ The following metrics are exported:
 | `mqbridge.messages.errors` | Counter | Message processing errors | `source_type`, `source_queue` |
 | `mqbridge.message.processing.duration` | Histogram | Processing duration in seconds | `source_type`, `source_queue` |
 
-Attribute values are derived from the bridge configuration and message content. `source_type` / `destination_type` is `rabbitmq` or `simplemq`. `source_queue` is the source queue name. `destination_queue` is the SimpleMQ queue name, or `exchange/routing_key` for RabbitMQ (determined dynamically from each message).
+Attribute values are derived from the bridge configuration and message content. `source_type` / `destination_type` is `rabbitmq` or `simplemq`. `source_queue` is the source queue name. `destination_queue` is the SimpleMQ queue name, or the exchange name for RabbitMQ (from each message).
 
 Both HTTP and gRPC protocols are supported. Set `OTEL_EXPORTER_OTLP_PROTOCOL` to `grpc` for gRPC transport (default: `http/protobuf`). All standard `OTEL_*` environment variables are supported.
 
