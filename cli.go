@@ -32,6 +32,11 @@ func RunCLI(ctx context.Context) error {
 		kong.BindTo(ctx, (*context.Context)(nil)),
 	)
 	setupLogger(cli.LogFormat)
+	shutdownMetrics, err := setupMeterProvider(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to setup meter provider: %w", err)
+	}
+	defer shutdownMetrics(ctx)
 	return kctx.Run(cli)
 }
 

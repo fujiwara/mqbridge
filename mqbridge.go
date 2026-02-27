@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 // Subscriber consumes messages from a source.
@@ -21,19 +25,27 @@ type Publisher interface {
 
 // Bridge connects one Subscriber to multiple Publishers.
 type Bridge struct {
-	From Subscriber
-	To   []Publisher
+	From     Subscriber
+	To       []Publisher
+	metrics  *Metrics
+	srcAttrs attribute.Set
+	dstAttrs []attribute.Set
 }
 
 // Run starts the bridge, consuming messages from the subscriber
 // and publishing to all publishers.
 func (b *Bridge) Run(ctx context.Context) error {
 	return b.From.Subscribe(ctx, func(ctx context.Context, msg []byte) error {
-		for _, pub := range b.To {
+		b.metrics.messagesReceived.Add(ctx, 1, metric.WithAttributeSet(b.srcAttrs))
+		start := time.Now()
+		for i, pub := range b.To {
 			if err := pub.Publish(ctx, msg); err != nil {
+				b.metrics.messageErrors.Add(ctx, 1, metric.WithAttributeSet(b.srcAttrs))
 				return fmt.Errorf("publish error: %w", err)
 			}
+			b.metrics.messagesPublished.Add(ctx, 1, metric.WithAttributeSet(b.dstAttrs[i]))
 		}
+		b.metrics.processingDuration.Record(ctx, time.Since(start).Seconds(), metric.WithAttributeSet(b.srcAttrs))
 		return nil
 	})
 }
@@ -114,10 +126,44 @@ func (a *App) Run(ctx context.Context) error {
 	return nil
 }
 
+// DestinationInfo holds type and queue name for a destination, used for test bridge construction.
+type DestinationInfo struct {
+	Type  string
+	Queue string
+}
+
+// NewBridgeForTest creates a Bridge with the given subscriber, publishers, and metric attributes.
+// This is intended for testing only.
+func NewBridgeForTest(sub Subscriber, pubs []Publisher, srcType, srcQueue string, dsts []DestinationInfo) *Bridge {
+	m, _ := newMetrics()
+	srcAttrs := attribute.NewSet(
+		attribute.String("source_type", srcType),
+		attribute.String("source_queue", srcQueue),
+	)
+	var dstAttrs []attribute.Set
+	for _, dst := range dsts {
+		dstAttrs = append(dstAttrs, attribute.NewSet(
+			attribute.String("destination_type", dst.Type),
+			attribute.String("destination_queue", dst.Queue),
+		))
+	}
+	return &Bridge{
+		From:     sub,
+		To:       pubs,
+		metrics:  m,
+		srcAttrs: srcAttrs,
+		dstAttrs: dstAttrs,
+	}
+}
+
 func buildBridges(cfg *Config) ([]*Bridge, error) {
+	m, err := newMetrics()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create metrics: %w", err)
+	}
 	var bridges []*Bridge
 	for i, bc := range cfg.Bridges {
-		bridge, err := buildBridge(cfg, bc)
+		bridge, err := buildBridge(cfg, bc, m)
 		if err != nil {
 			return nil, fmt.Errorf("bridges[%d]: %w", i, err)
 		}
@@ -126,31 +172,56 @@ func buildBridges(cfg *Config) ([]*Bridge, error) {
 	return bridges, nil
 }
 
-func buildBridge(cfg *Config, bc BridgeConfig) (*Bridge, error) {
+func buildBridge(cfg *Config, bc BridgeConfig, m *Metrics) (*Bridge, error) {
 	var sub Subscriber
 	var pubs []Publisher
 
+	var srcType, srcQueue string
 	if bc.From.RabbitMQ != nil {
 		sub = NewRabbitMQSubscriber(cfg.RabbitMQ.URL, *bc.From.RabbitMQ)
+		srcType = "rabbitmq"
+		srcQueue = bc.From.RabbitMQ.Queue
 	} else if bc.From.SimpleMQ != nil {
 		var err error
 		sub, err = NewSimpleMQSubscriber(cfg.SimpleMQ.APIURL, *bc.From.SimpleMQ)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create SimpleMQ subscriber: %w", err)
 		}
+		srcType = "simplemq"
+		srcQueue = bc.From.SimpleMQ.Queue
 	}
 
+	srcAttrs := attribute.NewSet(
+		attribute.String("source_type", srcType),
+		attribute.String("source_queue", srcQueue),
+	)
+
+	var dstAttrs []attribute.Set
 	for j, to := range bc.To {
 		if to.RabbitMQ != nil {
 			pubs = append(pubs, NewRabbitMQPublisher(cfg.RabbitMQ.URL))
+			dstAttrs = append(dstAttrs, attribute.NewSet(
+				attribute.String("destination_type", "rabbitmq"),
+				attribute.String("destination_queue", ""),
+			))
 		} else if to.SimpleMQ != nil {
 			pub, err := NewSimpleMQPublisher(cfg.SimpleMQ.APIURL, *to.SimpleMQ)
 			if err != nil {
 				return nil, fmt.Errorf("to[%d]: failed to create SimpleMQ publisher: %w", j, err)
 			}
 			pubs = append(pubs, pub)
+			dstAttrs = append(dstAttrs, attribute.NewSet(
+				attribute.String("destination_type", "simplemq"),
+				attribute.String("destination_queue", to.SimpleMQ.Queue),
+			))
 		}
 	}
 
-	return &Bridge{From: sub, To: pubs}, nil
+	return &Bridge{
+		From:     sub,
+		To:       pubs,
+		metrics:  m,
+		srcAttrs: srcAttrs,
+		dstAttrs: dstAttrs,
+	}, nil
 }

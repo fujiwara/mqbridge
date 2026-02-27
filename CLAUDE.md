@@ -21,6 +21,7 @@ go fmt ./...
 - `mqbridge.go` — `Subscriber`/`Publisher` interfaces, `Bridge`, `App` orchestration
 - `config.go` — Config structs, Jsonnet loader (`jsonnet-armed`)
 - `cli.go` — CLI definition (`kong`), `RunCLI()` entry point
+- `metrics.go` — OpenTelemetry metrics instruments and setup
 - `rabbitmq.go` — RabbitMQ subscriber/publisher (`amqp091-go`)
 - `simplemq.go` — SimpleMQ subscriber/publisher (`simplemq-api-go`)
 - `message.go` — SimpleMQ→RabbitMQ JSON message format
@@ -56,3 +57,6 @@ go fmt ./...
 | `github.com/sacloud/secretmanager-api-go` | Sakura Cloud Secret Manager client |
 | `github.com/fujiwara/sakura-secrets-cli` | sakura-secrets-localserver (test) |
 | `github.com/fujiwara/sloghandler` | Structured log handler (colored text with source) |
+| `go.opentelemetry.io/otel` | OpenTelemetry API |
+| `go.opentelemetry.io/otel/sdk/metric` | OpenTelemetry metrics SDK |
+| `go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp` | OTLP HTTP metrics exporter |

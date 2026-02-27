@@ -133,6 +133,25 @@ Messages from SimpleMQ to RabbitMQ must be in the following JSON format:
 - `headers` is optional.
 - The content of `body` is published to RabbitMQ.
 
+## Metrics
+
+mqbridge supports [OpenTelemetry](https://opentelemetry.io/) metrics. Metrics are auto-enabled when the `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable is set. When not set, metrics are disabled with zero overhead.
+
+```console
+$ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 mqbridge run -c config.jsonnet
+```
+
+The following metrics are exported:
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `mqbridge.messages.received` | Counter | Messages received from subscriber |
+| `mqbridge.messages.published` | Counter | Messages published to destination |
+| `mqbridge.messages.errors` | Counter | Message processing errors |
+| `mqbridge.message.processing.duration` | Histogram | Processing duration in seconds |
+
+All standard `OTEL_*` environment variables are supported (e.g., `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_EXPORTER_OTLP_PROTOCOL`).
+
 ## LICENSE
 
 MIT
