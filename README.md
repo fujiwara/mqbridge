@@ -26,8 +26,8 @@ Commands:
   render      Render config as JSON to stdout
 
 Flags:
-  --config, -c    Config file path (Jsonnet/JSON) (required)
-  --log-format    Log format: text (default, colored with source) or json
+  --config, -c    Config file path (Jsonnet/JSON) (required) [$MQBRIDGE_CONFIG]
+  --log-format    Log format: text (default, colored with source) or json [$MQBRIDGE_LOG_FORMAT]
   --version       Show version
   --help          Show help
 ```
