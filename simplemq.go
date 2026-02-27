@@ -79,13 +79,16 @@ func (s *SimpleMQSubscriber) poll(ctx context.Context, handler func(ctx context.
 	if !ok {
 		return fmt.Errorf("unexpected response type: %T", res)
 	}
+	// Use a non-cancellable context for message processing and deletion
+	// so in-flight work completes even when the parent context is cancelled.
+	msgCtx := context.WithoutCancel(ctx)
 	for _, msg := range recvOK.Messages {
 		body, err := base64.StdEncoding.DecodeString(string(msg.Content))
 		if err != nil {
 			s.logger.Error("failed to decode message content", "queue", s.queueName, "error", err)
 			continue
 		}
-		if err := handler(ctx, body); err != nil {
+		if err := handler(msgCtx, body); err != nil {
 			s.logger.Error("failed to handle message, skipping delete",
 				"queue", s.queueName,
 				"messageId", msg.ID,
@@ -94,7 +97,7 @@ func (s *SimpleMQSubscriber) poll(ctx context.Context, handler func(ctx context.
 			continue
 		}
 		// Delete message after successful handling
-		if _, err := s.client.DeleteMessage(ctx, message.DeleteMessageParams{
+		if _, err := s.client.DeleteMessage(msgCtx, message.DeleteMessageParams{
 			QueueName: message.QueueName(s.queueName),
 			MessageId: msg.ID,
 		}); err != nil {

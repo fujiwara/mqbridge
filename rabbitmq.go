@@ -72,8 +72,7 @@ func (s *RabbitMQSubscriber) Subscribe(ctx context.Context, handler func(ctx con
 		return fmt.Errorf("failed to bind queue %q to exchange %q: %w", s.config.Queue, s.config.Exchange, err)
 	}
 
-	msgs, err := s.ch.ConsumeWithContext(
-		ctx,
+	msgs, err := s.ch.Consume(
 		s.config.Queue,
 		"",    // consumer tag
 		false, // auto-ack
@@ -91,12 +90,21 @@ func (s *RabbitMQSubscriber) Subscribe(ctx context.Context, handler func(ctx con
 		select {
 		case <-ctx.Done():
 			s.logger.Info("RabbitMQ subscriber stopping", "queue", s.config.Queue)
+			// Drain remaining deliveries so the AMQP reader goroutine is not
+			// blocked when ch.Close() is called later. Unacked messages will be
+			// redelivered by RabbitMQ.
+			go func() {
+				for range msgs {
+				}
+			}()
 			return ctx.Err()
 		case delivery, ok := <-msgs:
 			if !ok {
 				return fmt.Errorf("RabbitMQ channel closed for queue %q", s.config.Queue)
 			}
-			if err := handler(ctx, delivery.Body); err != nil {
+			// Use a non-cancellable context so in-flight message processing
+			// completes even when the parent context is cancelled.
+			if err := handler(context.WithoutCancel(ctx), delivery.Body); err != nil {
 				s.logger.Error("failed to handle message, nacking",
 					"queue", s.config.Queue,
 					"error", err,
