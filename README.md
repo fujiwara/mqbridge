@@ -81,11 +81,13 @@ Configuration is written in Jsonnet (plain JSON is also accepted).
 You can use `secret()` native function to retrieve credentials from Sakura Cloud Secret Manager. This requires `SAKURA_ACCESS_TOKEN` and `SAKURA_ACCESS_TOKEN_SECRET` environment variables.
 
 ```
-std.native('secret')('vault-id', 'name')      // latest version
-std.native('secret')('vault-id', 'name:1')    // specific version
+local secret = std.native('secret');
+secret('vault-id', 'name')      // latest version
+secret('vault-id', 'name:1')    // specific version
 ```
 
 ```jsonnet
+local secret = std.native('secret');
 {
   rabbitmq: {
     url: std.native('must_env')('RABBITMQ_URL'),
@@ -104,7 +106,7 @@ std.native('secret')('vault-id', 'name:1')    // specific version
         {
           simplemq: {
             queue: 'dest-queue',
-            api_key: std.native('secret')('vault-id-xxx', 'simplemq-api-key'),
+            api_key: secret('vault-id-xxx', 'simplemq-api-key'),
           },
         },
       ],

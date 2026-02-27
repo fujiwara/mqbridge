@@ -217,7 +217,8 @@ func TestSecretInJsonnetConfig(t *testing.T) {
 
 	createTestSecret(t, ts.URL, vaultID, secretName, secretValue)
 
-	configContent := `{
+	configContent := `local secret = std.native('secret');
+{
   rabbitmq: {
     url: 'amqp://localhost:5672/',
   },
@@ -235,7 +236,7 @@ func TestSecretInJsonnetConfig(t *testing.T) {
         {
           simplemq: {
             queue: 'dest',
-            api_key: std.native('secret')('` + vaultID + `', '` + secretName + `'),
+            api_key: secret('` + vaultID + `', '` + secretName + `'),
           },
         },
       ],
@@ -271,7 +272,8 @@ func TestSecretWithVersionInJsonnetConfig(t *testing.T) {
 	createTestSecret(t, ts.URL, vaultID, secretName, "old-key")
 	createTestSecret(t, ts.URL, vaultID, secretName, "new-key")
 
-	configContent := fmt.Sprintf(`{
+	configContent := fmt.Sprintf(`local secret = std.native('secret');
+{
   rabbitmq: {
     url: 'amqp://localhost:5672/',
   },
@@ -289,13 +291,13 @@ func TestSecretWithVersionInJsonnetConfig(t *testing.T) {
         {
           simplemq: {
             queue: 'dest-latest',
-            api_key: std.native('secret')('%s', '%s'),
+            api_key: secret('%s', '%s'),
           },
         },
         {
           simplemq: {
             queue: 'dest-v1',
-            api_key: std.native('secret')('%s', '%s:1'),
+            api_key: secret('%s', '%s:1'),
           },
         },
       ],
