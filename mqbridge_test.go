@@ -45,6 +45,9 @@ func requireRabbitMQ(t *testing.T) *amqp.Connection {
 	}
 	conn, err := amqp.Dial(url)
 	if err != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatalf("RabbitMQ not available in CI: %v", err)
+		}
 		t.Skipf("RabbitMQ not available: %v", err)
 	}
 	return conn
