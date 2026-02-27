@@ -2,10 +2,12 @@ package mqbridge
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -68,7 +70,17 @@ func setupMeterProvider(ctx context.Context) (func(context.Context) error, error
 		return noop, nil
 	}
 
-	exporter, err := otlpmetrichttp.New(ctx)
+	protocol := os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL")
+	var exporter sdkmetric.Exporter
+	var err error
+	switch protocol {
+	case "grpc":
+		exporter, err = otlpmetricgrpc.New(ctx)
+	case "http/protobuf", "":
+		exporter, err = otlpmetrichttp.New(ctx)
+	default:
+		return noop, fmt.Errorf("unsupported OTEL_EXPORTER_OTLP_PROTOCOL: %s", protocol)
+	}
 	if err != nil {
 		return noop, err
 	}
@@ -78,6 +90,9 @@ func setupMeterProvider(ctx context.Context) (func(context.Context) error, error
 	)
 	otel.SetMeterProvider(provider)
 
-	slog.Info("OpenTelemetry metrics enabled")
+	if protocol == "" {
+		protocol = "http/protobuf"
+	}
+	slog.Info("OpenTelemetry metrics enabled", "protocol", protocol)
 	return provider.Shutdown, nil
 }

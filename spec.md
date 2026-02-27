@@ -136,7 +136,7 @@ Metrics are configured via standard OpenTelemetry environment variables:
 
 - `OTEL_EXPORTER_OTLP_ENDPOINT` — OTLP endpoint URL (e.g., `http://localhost:4318`). If not set, metrics are disabled (zero overhead).
 - `OTEL_EXPORTER_OTLP_HEADERS` — Additional headers for the exporter.
-- `OTEL_EXPORTER_OTLP_PROTOCOL` — Protocol (default: `http/protobuf`).
+- `OTEL_EXPORTER_OTLP_PROTOCOL` — Protocol: `http/protobuf` (default) or `grpc`.
 
 ## 6. Libraries
 
@@ -153,6 +153,7 @@ Metrics are configured via standard OpenTelemetry environment variables:
 | `go.opentelemetry.io/otel` | OpenTelemetry API |
 | `go.opentelemetry.io/otel/sdk/metric` | OpenTelemetry metrics SDK |
 | `go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp` | OTLP HTTP metrics exporter |
+| `go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc` | OTLP gRPC metrics exporter |
 
 ## 7. Package Structure
 

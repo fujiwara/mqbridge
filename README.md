@@ -150,7 +150,7 @@ The following metrics are exported:
 | `mqbridge.messages.errors` | Counter | Message processing errors |
 | `mqbridge.message.processing.duration` | Histogram | Processing duration in seconds |
 
-All standard `OTEL_*` environment variables are supported (e.g., `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_EXPORTER_OTLP_PROTOCOL`).
+Both HTTP and gRPC protocols are supported. Set `OTEL_EXPORTER_OTLP_PROTOCOL` to `grpc` for gRPC transport (default: `http/protobuf`). All standard `OTEL_*` environment variables are supported.
 
 ## LICENSE
 

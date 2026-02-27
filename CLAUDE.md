@@ -60,3 +60,4 @@ go fmt ./...
 | `go.opentelemetry.io/otel` | OpenTelemetry API |
 | `go.opentelemetry.io/otel/sdk/metric` | OpenTelemetry metrics SDK |
 | `go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp` | OTLP HTTP metrics exporter |
+| `go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc` | OTLP gRPC metrics exporter |
