@@ -15,19 +15,58 @@ type RabbitMQSubscriber struct {
 	config FromRabbitMQConfig
 	conn   *amqp.Connection
 	ch     *amqp.Channel
+	logger *slog.Logger
 }
 
 // NewRabbitMQSubscriber creates a new RabbitMQSubscriber.
-func NewRabbitMQSubscriber(url string, config FromRabbitMQConfig) *RabbitMQSubscriber {
+func NewRabbitMQSubscriber(url string, config FromRabbitMQConfig, logger *slog.Logger) *RabbitMQSubscriber {
 	return &RabbitMQSubscriber{
 		url:    url,
 		config: config,
+		logger: logger,
 	}
 }
 
-// Subscribe starts consuming messages from the RabbitMQ queue.
-// It declares the exchange and queue, binds them, and calls the handler for each message.
+// Subscribe starts consuming messages from the RabbitMQ queue with automatic
+// reconnection on connection loss. It uses exponential backoff between retries.
 func (s *RabbitMQSubscriber) Subscribe(ctx context.Context, handler func(ctx context.Context, msg []byte) error) error {
+	const (
+		initialBackoff = 1 * time.Second
+		maxBackoff     = 30 * time.Second
+	)
+	backoff := initialBackoff
+	var attempt int
+	for {
+		start := time.Now()
+		err := s.subscribeOnce(ctx, handler)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		// Reset backoff if the connection was alive long enough,
+		// indicating a transient failure rather than a persistent one.
+		if time.Since(start) > maxBackoff {
+			backoff = initialBackoff
+			attempt = 0
+		}
+		attempt++
+		s.logger.Error("connection lost, reconnecting...", "queue", s.config.Queue, "error", err, "attempt", attempt, "backoff", backoff)
+		s.closeConn()
+
+		// Wait with backoff, respecting context cancellation.
+		timer := time.NewTimer(backoff)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+		backoff = min(backoff*2, maxBackoff)
+	}
+}
+
+// subscribeOnce connects to RabbitMQ, declares the exchange/queue, and consumes
+// messages until the connection is lost or the context is cancelled.
+func (s *RabbitMQSubscriber) subscribeOnce(ctx context.Context, handler func(ctx context.Context, msg []byte) error) error {
 	if err := s.connect(); err != nil {
 		return err
 	}
@@ -70,8 +109,7 @@ func (s *RabbitMQSubscriber) Subscribe(ctx context.Context, handler func(ctx con
 		return fmt.Errorf("failed to bind queue %q to exchange %q: %w", s.config.Queue, s.config.Exchange, err)
 	}
 
-	msgs, err := s.ch.ConsumeWithContext(
-		ctx,
+	msgs, err := s.ch.Consume(
 		s.config.Queue,
 		"",    // consumer tag
 		false, // auto-ack
@@ -84,49 +122,58 @@ func (s *RabbitMQSubscriber) Subscribe(ctx context.Context, handler func(ctx con
 		return fmt.Errorf("failed to consume from queue %q: %w", s.config.Queue, err)
 	}
 
-	slog.Info("RabbitMQ subscriber started", "queue", s.config.Queue, "exchange", s.config.Exchange)
+	s.logger.Info("RabbitMQ subscriber started", "queue", s.config.Queue, "exchange", s.config.Exchange)
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Info("RabbitMQ subscriber stopping", "queue", s.config.Queue)
+			s.logger.Info("RabbitMQ subscriber stopping", "queue", s.config.Queue)
+			// Drain remaining deliveries so the AMQP reader goroutine is not
+			// blocked when ch.Close() is called later. Unacked messages will be
+			// redelivered by RabbitMQ.
+			go func() {
+				for range msgs {
+				}
+			}()
 			return ctx.Err()
 		case delivery, ok := <-msgs:
 			if !ok {
 				return fmt.Errorf("RabbitMQ channel closed for queue %q", s.config.Queue)
 			}
-			if err := handler(ctx, delivery.Body); err != nil {
-				slog.Error("failed to handle message, nacking",
+			// Use a non-cancellable context so in-flight message processing
+			// completes even when the parent context is cancelled.
+			if err := handler(context.WithoutCancel(ctx), delivery.Body); err != nil {
+				s.logger.Error("failed to handle message, nacking",
 					"queue", s.config.Queue,
 					"error", err,
 				)
 				if nackErr := delivery.Nack(false, true); nackErr != nil {
-					slog.Error("failed to nack message", "error", nackErr)
+					s.logger.Error("failed to nack message", "error", nackErr)
 				}
 			} else {
 				if ackErr := delivery.Ack(false); ackErr != nil {
-					slog.Error("failed to ack message", "error", ackErr)
+					s.logger.Error("failed to ack message", "error", ackErr)
 				}
 			}
 		}
 	}
 }
 
-// Close closes the RabbitMQ connection.
-func (s *RabbitMQSubscriber) Close() error {
-	var errs []error
+// closeConn closes the subscriber's channel and connection, ignoring errors.
+// It is safe to call multiple times.
+func (s *RabbitMQSubscriber) closeConn() {
 	if s.ch != nil {
-		if err := s.ch.Close(); err != nil {
-			errs = append(errs, err)
-		}
+		s.ch.Close()
+		s.ch = nil
 	}
 	if s.conn != nil {
-		if err := s.conn.Close(); err != nil {
-			errs = append(errs, err)
-		}
+		s.conn.Close()
+		s.conn = nil
 	}
-	if len(errs) > 0 {
-		return fmt.Errorf("errors closing RabbitMQ subscriber: %v", errs)
-	}
+}
+
+// Close closes the RabbitMQ connection.
+func (s *RabbitMQSubscriber) Close() error {
+	s.closeConn()
 	return nil
 }
 
@@ -148,14 +195,15 @@ func (s *RabbitMQSubscriber) connect() error {
 // RabbitMQPublisher publishes messages to RabbitMQ.
 // The destination exchange and routing key are determined by the message JSON.
 type RabbitMQPublisher struct {
-	url  string
-	conn *amqp.Connection
-	ch   *amqp.Channel
+	url    string
+	conn   *amqp.Connection
+	ch     *amqp.Channel
+	logger *slog.Logger
 }
 
 // NewRabbitMQPublisher creates a new RabbitMQPublisher.
-func NewRabbitMQPublisher(url string) *RabbitMQPublisher {
-	return &RabbitMQPublisher{url: url}
+func NewRabbitMQPublisher(url string, logger *slog.Logger) *RabbitMQPublisher {
+	return &RabbitMQPublisher{url: url, logger: logger}
 }
 
 // Publish parses the message JSON and publishes to the specified exchange/routing key.
@@ -228,6 +276,6 @@ func (p *RabbitMQPublisher) ensureConnected() error {
 	}
 	p.conn = conn
 	p.ch = ch
-	slog.Info("RabbitMQ publisher connected")
+	p.logger.Info("RabbitMQ publisher connected")
 	return nil
 }

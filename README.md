@@ -47,6 +47,7 @@ Configuration is written in Jsonnet (plain JSON is also accepted).
   },
   bridges: [
     {
+      name: 'rmq-to-smq',  // optional, used in log output (defaults to bridge index)
       // RabbitMQ → SimpleMQ (fan-out)
       from: {
         rabbitmq: {
@@ -62,6 +63,7 @@ Configuration is written in Jsonnet (plain JSON is also accepted).
       ],
     },
     {
+      name: 'smq-to-rmq',
       // SimpleMQ → RabbitMQ (routing by message content)
       from: {
         simplemq: {

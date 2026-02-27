@@ -32,10 +32,11 @@ type SimpleMQSubscriber struct {
 	client          *message.Client
 	queueName       string
 	pollingInterval time.Duration
+	logger          *slog.Logger
 }
 
 // NewSimpleMQSubscriber creates a new SimpleMQSubscriber.
-func NewSimpleMQSubscriber(apiURL string, config FromSimpleMQConfig) (*SimpleMQSubscriber, error) {
+func NewSimpleMQSubscriber(apiURL string, config FromSimpleMQConfig, logger *slog.Logger) (*SimpleMQSubscriber, error) {
 	client, err := newSimpleMQClient(apiURL, config.APIKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SimpleMQ client: %w", err)
@@ -44,23 +45,24 @@ func NewSimpleMQSubscriber(apiURL string, config FromSimpleMQConfig) (*SimpleMQS
 		client:          client,
 		queueName:       config.Queue,
 		pollingInterval: config.GetPollingInterval(),
+		logger:          logger,
 	}, nil
 }
 
 // Subscribe polls the SimpleMQ queue and calls the handler for each message.
 func (s *SimpleMQSubscriber) Subscribe(ctx context.Context, handler func(ctx context.Context, msg []byte) error) error {
-	slog.Info("SimpleMQ subscriber started", "queue", s.queueName, "interval", s.pollingInterval)
+	s.logger.Info("SimpleMQ subscriber started", "queue", s.queueName, "interval", s.pollingInterval)
 	ticker := time.NewTicker(s.pollingInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Info("SimpleMQ subscriber stopping", "queue", s.queueName)
+			s.logger.Info("SimpleMQ subscriber stopping", "queue", s.queueName)
 			return ctx.Err()
 		case <-ticker.C:
 			if err := s.poll(ctx, handler); err != nil {
-				slog.Error("SimpleMQ poll error", "queue", s.queueName, "error", err)
+				s.logger.Error("SimpleMQ poll error", "queue", s.queueName, "error", err)
 			}
 		}
 	}
@@ -77,14 +79,17 @@ func (s *SimpleMQSubscriber) poll(ctx context.Context, handler func(ctx context.
 	if !ok {
 		return fmt.Errorf("unexpected response type: %T", res)
 	}
+	// Use a non-cancellable context for message processing and deletion
+	// so in-flight work completes even when the parent context is cancelled.
+	msgCtx := context.WithoutCancel(ctx)
 	for _, msg := range recvOK.Messages {
 		body, err := base64.StdEncoding.DecodeString(string(msg.Content))
 		if err != nil {
-			slog.Error("failed to decode message content", "queue", s.queueName, "error", err)
+			s.logger.Error("failed to decode message content", "queue", s.queueName, "error", err)
 			continue
 		}
-		if err := handler(ctx, body); err != nil {
-			slog.Error("failed to handle message, skipping delete",
+		if err := handler(msgCtx, body); err != nil {
+			s.logger.Error("failed to handle message, skipping delete",
 				"queue", s.queueName,
 				"messageId", msg.ID,
 				"error", err,
@@ -92,11 +97,11 @@ func (s *SimpleMQSubscriber) poll(ctx context.Context, handler func(ctx context.
 			continue
 		}
 		// Delete message after successful handling
-		if _, err := s.client.DeleteMessage(ctx, message.DeleteMessageParams{
+		if _, err := s.client.DeleteMessage(msgCtx, message.DeleteMessageParams{
 			QueueName: message.QueueName(s.queueName),
 			MessageId: msg.ID,
 		}); err != nil {
-			slog.Error("failed to delete message", "queue", s.queueName, "messageId", msg.ID, "error", err)
+			s.logger.Error("failed to delete message", "queue", s.queueName, "messageId", msg.ID, "error", err)
 		}
 	}
 	return nil
