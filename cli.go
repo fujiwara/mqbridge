@@ -9,15 +9,17 @@ import (
 	"os"
 
 	"github.com/alecthomas/kong"
+	"github.com/fujiwara/sloghandler"
 )
 
 // CLI defines the command-line interface for mqbridge.
 type CLI struct {
-	Config   string           `kong:"required,short='c',help='Config file path (Jsonnet/JSON)'" `
-	Run      RunCmd           `cmd:"" help:"Run the bridge"`
-	Validate ValidateCmd      `cmd:"" help:"Validate config"`
-	Render   RenderCmd        `cmd:"" help:"Render config as JSON to stdout"`
-	Version  kong.VersionFlag `help:"Show version"`
+	Config    string           `kong:"required,short='c',help='Config file path (Jsonnet/JSON)'" `
+	LogFormat string           `kong:"default='text',enum='text,json',help='Log format (text or json)'" `
+	Run       RunCmd           `cmd:"" help:"Run the bridge"`
+	Validate  ValidateCmd      `cmd:"" help:"Validate config"`
+	Render    RenderCmd        `cmd:"" help:"Render config as JSON to stdout"`
+	Version   kong.VersionFlag `help:"Show version"`
 }
 
 // RunCLI parses command-line arguments and executes the appropriate subcommand.
@@ -29,6 +31,7 @@ func RunCLI(ctx context.Context) error {
 		kong.Vars{"version": Version},
 		kong.BindTo(ctx, (*context.Context)(nil)),
 	)
+	setupLogger(cli.LogFormat)
 	return kctx.Run(cli)
 }
 
@@ -70,6 +73,21 @@ type RenderCmd struct{}
 
 func (c *RenderCmd) Run(ctx context.Context, globals *CLI) error {
 	return RenderConfigTo(ctx, globals.Config, os.Stdout)
+}
+
+func setupLogger(format string) {
+	var handler slog.Handler
+	switch format {
+	case "json":
+		handler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{AddSource: true})
+	default:
+		handler = sloghandler.NewLogHandler(os.Stderr, &sloghandler.HandlerOptions{
+			HandlerOptions: slog.HandlerOptions{Level: slog.LevelInfo},
+			Color:          true,
+			Source:         true,
+		})
+	}
+	slog.SetDefault(slog.New(handler))
 }
 
 // RenderConfigTo evaluates a config file and writes pretty-printed JSON to w.

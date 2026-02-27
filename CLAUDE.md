@@ -55,3 +55,4 @@ go fmt ./...
 | `github.com/fujiwara/simplemq-cli` | simplemq-localserver (test) |
 | `github.com/sacloud/secretmanager-api-go` | Sakura Cloud Secret Manager client |
 | `github.com/fujiwara/sakura-secrets-cli` | sakura-secrets-localserver (test) |
+| `github.com/fujiwara/sloghandler` | Structured log handler (colored text with source) |

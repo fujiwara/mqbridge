@@ -27,6 +27,7 @@ Commands:
 
 Flags:
   --config, -c    Config file path (Jsonnet/JSON) (required)
+  --log-format    Log format: text (default, colored with source) or json
   --version       Show version
   --help          Show help
 ```

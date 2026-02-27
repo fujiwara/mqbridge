@@ -18,6 +18,8 @@ github.com/fujiwara/sakura-secrets-cli v0.2.0 h1:PUuD/2b/sjfo+noRzzFQ/t8JYpq1iKL
 github.com/fujiwara/sakura-secrets-cli v0.2.0/go.mod h1:1JhLMDqhoIO4Lmp2lPL1Q4Tp+U36wU2jcdhcHLSzfdI=
 github.com/fujiwara/simplemq-cli v0.2.2 h1:jQ3xtCrj7QOhLltNhGEvvTkLoQlGFzBE3mwC6aXio4Q=
 github.com/fujiwara/simplemq-cli v0.2.2/go.mod h1:0sALl0ECXFOnnfDpwyWkwm9X6hChXP633EEh85UF1rE=
+github.com/fujiwara/sloghandler v0.1.0 h1:4uxE5z01fKv/qzUoIyYk/2H1D4xEb/wi2K/Wks9z5Tg=
+github.com/fujiwara/sloghandler v0.1.0/go.mod h1:9wl7zZ1fO53Gl83/M8KFYW+5iACiwXAltOL5REOUd24=
 github.com/ghodss/yaml v1.0.0 h1:wQHKEahhL6wmXdzwWG11gIVCkOv05bNOh+Rxn0yngAk=
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
 github.com/go-faster/errors v0.7.1 h1:MkJTnDoEdi9pDabt1dpWf7AA8/BaSYZqibYyhZ20AYg=

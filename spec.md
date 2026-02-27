@@ -97,17 +97,19 @@ Commands:
 
 Flags:
   --config, -c    Config file path (Jsonnet/JSON) (required)
+  --log-format    Log format: text (default, colored with source) or json
   --version       Show version
   --help          Show help
 ```
 
 ```go
 type CLI struct {
-    Config   string           `kong:"required,short='c',help='Config file path'"`
-    Run      RunCmd           `cmd:"" help:"Run the bridge"`
-    Validate ValidateCmd      `cmd:"" help:"Validate config"`
-    Render   RenderCmd        `cmd:"" help:"Render config as JSON to stdout"`
-    Version  kong.VersionFlag `help:"Show version"`
+    Config    string           `kong:"required,short='c',help='Config file path'"`
+    LogFormat string           `kong:"default='text',enum='text,json',help='Log format (text or json)'"`
+    Run       RunCmd           `cmd:"" help:"Run the bridge"`
+    Validate  ValidateCmd      `cmd:"" help:"Validate config"`
+    Render    RenderCmd        `cmd:"" help:"Render config as JSON to stdout"`
+    Version   kong.VersionFlag `help:"Show version"`
 }
 ```
 
@@ -126,6 +128,7 @@ type CLI struct {
 | `github.com/fujiwara/simplemq-cli` | simplemq-localserver (test) |
 | `github.com/sacloud/secretmanager-api-go` | Sakura Cloud Secret Manager client |
 | `github.com/fujiwara/sakura-secrets-cli` | sakura-secrets-localserver (test) |
+| `github.com/fujiwara/sloghandler` | Structured log handler (colored text with source) |
 
 ## 6. Package Structure
 
