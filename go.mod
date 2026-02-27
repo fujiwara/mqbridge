@@ -6,7 +6,7 @@ require (
 	github.com/alecthomas/kong v1.14.0
 	github.com/fujiwara/jsonnet-armed v0.1.1
 	github.com/fujiwara/sakura-secrets-cli v0.2.0
-	github.com/fujiwara/simplemq-cli v0.2.1
+	github.com/fujiwara/simplemq-cli v0.2.2
 	github.com/google/go-jsonnet v0.21.0
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/sacloud/saclient-go v0.2.6
