@@ -29,6 +29,7 @@ type SimpleMQConfig struct {
 
 // BridgeConfig defines a single bridge rule.
 type BridgeConfig struct {
+	Name string     `json:"name,omitempty"`
 	From FromConfig `json:"from"`
 	To   []ToConfig `json:"to"`
 }

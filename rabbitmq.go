@@ -15,13 +15,15 @@ type RabbitMQSubscriber struct {
 	config FromRabbitMQConfig
 	conn   *amqp.Connection
 	ch     *amqp.Channel
+	logger *slog.Logger
 }
 
 // NewRabbitMQSubscriber creates a new RabbitMQSubscriber.
-func NewRabbitMQSubscriber(url string, config FromRabbitMQConfig) *RabbitMQSubscriber {
+func NewRabbitMQSubscriber(url string, config FromRabbitMQConfig, logger *slog.Logger) *RabbitMQSubscriber {
 	return &RabbitMQSubscriber{
 		url:    url,
 		config: config,
+		logger: logger,
 	}
 }
 
@@ -84,27 +86,27 @@ func (s *RabbitMQSubscriber) Subscribe(ctx context.Context, handler func(ctx con
 		return fmt.Errorf("failed to consume from queue %q: %w", s.config.Queue, err)
 	}
 
-	slog.Info("RabbitMQ subscriber started", "queue", s.config.Queue, "exchange", s.config.Exchange)
+	s.logger.Info("RabbitMQ subscriber started", "queue", s.config.Queue, "exchange", s.config.Exchange)
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Info("RabbitMQ subscriber stopping", "queue", s.config.Queue)
+			s.logger.Info("RabbitMQ subscriber stopping", "queue", s.config.Queue)
 			return ctx.Err()
 		case delivery, ok := <-msgs:
 			if !ok {
 				return fmt.Errorf("RabbitMQ channel closed for queue %q", s.config.Queue)
 			}
 			if err := handler(ctx, delivery.Body); err != nil {
-				slog.Error("failed to handle message, nacking",
+				s.logger.Error("failed to handle message, nacking",
 					"queue", s.config.Queue,
 					"error", err,
 				)
 				if nackErr := delivery.Nack(false, true); nackErr != nil {
-					slog.Error("failed to nack message", "error", nackErr)
+					s.logger.Error("failed to nack message", "error", nackErr)
 				}
 			} else {
 				if ackErr := delivery.Ack(false); ackErr != nil {
-					slog.Error("failed to ack message", "error", ackErr)
+					s.logger.Error("failed to ack message", "error", ackErr)
 				}
 			}
 		}
@@ -148,14 +150,15 @@ func (s *RabbitMQSubscriber) connect() error {
 // RabbitMQPublisher publishes messages to RabbitMQ.
 // The destination exchange and routing key are determined by the message JSON.
 type RabbitMQPublisher struct {
-	url  string
-	conn *amqp.Connection
-	ch   *amqp.Channel
+	url    string
+	conn   *amqp.Connection
+	ch     *amqp.Channel
+	logger *slog.Logger
 }
 
 // NewRabbitMQPublisher creates a new RabbitMQPublisher.
-func NewRabbitMQPublisher(url string) *RabbitMQPublisher {
-	return &RabbitMQPublisher{url: url}
+func NewRabbitMQPublisher(url string, logger *slog.Logger) *RabbitMQPublisher {
+	return &RabbitMQPublisher{url: url, logger: logger}
 }
 
 // Publish parses the message JSON and publishes to the specified exchange/routing key.
@@ -228,6 +231,6 @@ func (p *RabbitMQPublisher) ensureConnected() error {
 	}
 	p.conn = conn
 	p.ch = ch
-	slog.Info("RabbitMQ publisher connected")
+	p.logger.Info("RabbitMQ publisher connected")
 	return nil
 }

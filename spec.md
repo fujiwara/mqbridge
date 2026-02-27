@@ -45,6 +45,7 @@ mqbridge is a message bridge between RabbitMQ and SimpleMQ. It defines multiple 
   },
   bridges: [
     {
+      name: 'rmq-to-smq',  // optional, used in log output
       // RabbitMQ → SimpleMQ (fan-out)
       from: {
         rabbitmq: {
@@ -60,6 +61,7 @@ mqbridge is a message bridge between RabbitMQ and SimpleMQ. It defines multiple 
       ],
     },
     {
+      name: 'smq-to-rmq',
       // SimpleMQ → RabbitMQ (routing by message content)
       from: {
         simplemq: {
@@ -75,6 +77,8 @@ mqbridge is a message bridge between RabbitMQ and SimpleMQ. It defines multiple 
   ],
 }
 ```
+
+**Note**: Each bridge can have an optional `name` field. When set, all log messages from that bridge include `bridge=<name>`. When not set, the bridge index (0-based) is used instead.
 
 **Note**: SimpleMQ `api_key` differs per queue, so it is specified individually on each simplemq reference (both from and to). Jsonnet variables can be used to avoid duplication:
 

@@ -38,6 +38,7 @@ type Bridge struct {
 	srcAttrs attribute.Set
 	srcType  string
 	srcQueue string
+	logger   *slog.Logger
 }
 
 // Run starts the bridge, consuming messages from the subscriber
@@ -45,7 +46,7 @@ type Bridge struct {
 func (b *Bridge) Run(ctx context.Context) error {
 	return b.From.Subscribe(ctx, func(ctx context.Context, msg []byte) error {
 		b.metrics.messagesReceived.Add(ctx, 1, metric.WithAttributeSet(b.srcAttrs))
-		slog.Debug("message received",
+		b.logger.Debug("message received",
 			"source_type", b.srcType,
 			"source_queue", b.srcQueue,
 			"size", len(msg),
@@ -55,7 +56,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 			result, err := pub.Publish(ctx, msg)
 			if err != nil {
 				b.metrics.messageErrors.Add(ctx, 1, metric.WithAttributeSet(b.srcAttrs))
-				slog.Error("failed to publish message",
+				b.logger.Error("failed to publish message",
 					"destination_type", pub.Type(),
 					"error", err,
 				)
@@ -66,7 +67,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 				attribute.String("destination_queue", result.Destination),
 			)
 			b.metrics.messagesPublished.Add(ctx, 1, metric.WithAttributeSet(dstAttrs))
-			slog.Debug("message published",
+			b.logger.Debug("message published",
 				"destination_type", pub.Type(),
 				"destination_queue", result.Destination,
 			)
@@ -122,17 +123,17 @@ func (a *App) Run(ctx context.Context) error {
 	var wg sync.WaitGroup
 	errCh := make(chan error, len(a.bridges))
 
-	for i, b := range a.bridges {
+	for _, b := range a.bridges {
 		wg.Add(1)
-		go func(idx int, bridge *Bridge) {
+		go func(bridge *Bridge) {
 			defer wg.Done()
-			slog.Info("starting bridge", "index", idx)
+			bridge.logger.Info("starting bridge")
 			if err := bridge.Run(ctx); err != nil && ctx.Err() == nil {
-				slog.Error("bridge error", "index", idx, "error", err)
-				errCh <- fmt.Errorf("bridge[%d]: %w", idx, err)
+				bridge.logger.Error("bridge error", "error", err)
+				errCh <- err
 				cancel()
 			}
-		}(i, b)
+		}(b)
 	}
 
 	wg.Wait()
@@ -167,6 +168,7 @@ func NewBridgeForTest(sub Subscriber, pubs []Publisher, srcType, srcQueue string
 		srcAttrs: srcAttrs,
 		srcType:  srcType,
 		srcQueue: srcQueue,
+		logger:   slog.Default().With("bridge", "test"),
 	}
 }
 
@@ -177,7 +179,14 @@ func buildBridges(cfg *Config) ([]*Bridge, error) {
 	}
 	var bridges []*Bridge
 	for i, bc := range cfg.Bridges {
-		bridge, err := buildBridge(cfg, bc, m)
+		var bridgeLabel any
+		if bc.Name != "" {
+			bridgeLabel = bc.Name
+		} else {
+			bridgeLabel = i
+		}
+		logger := slog.Default().With("bridge", bridgeLabel)
+		bridge, err := buildBridge(cfg, bc, m, logger)
 		if err != nil {
 			return nil, fmt.Errorf("bridges[%d]: %w", i, err)
 		}
@@ -186,18 +195,18 @@ func buildBridges(cfg *Config) ([]*Bridge, error) {
 	return bridges, nil
 }
 
-func buildBridge(cfg *Config, bc BridgeConfig, m *Metrics) (*Bridge, error) {
+func buildBridge(cfg *Config, bc BridgeConfig, m *Metrics, logger *slog.Logger) (*Bridge, error) {
 	var sub Subscriber
 	var pubs []Publisher
 
 	var srcType, srcQueue string
 	if bc.From.RabbitMQ != nil {
-		sub = NewRabbitMQSubscriber(cfg.RabbitMQ.URL, *bc.From.RabbitMQ)
+		sub = NewRabbitMQSubscriber(cfg.RabbitMQ.URL, *bc.From.RabbitMQ, logger)
 		srcType = "rabbitmq"
 		srcQueue = bc.From.RabbitMQ.Queue
 	} else if bc.From.SimpleMQ != nil {
 		var err error
-		sub, err = NewSimpleMQSubscriber(cfg.SimpleMQ.APIURL, *bc.From.SimpleMQ)
+		sub, err = NewSimpleMQSubscriber(cfg.SimpleMQ.APIURL, *bc.From.SimpleMQ, logger)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create SimpleMQ subscriber: %w", err)
 		}
@@ -212,7 +221,7 @@ func buildBridge(cfg *Config, bc BridgeConfig, m *Metrics) (*Bridge, error) {
 
 	for j, to := range bc.To {
 		if to.RabbitMQ != nil {
-			pubs = append(pubs, NewRabbitMQPublisher(cfg.RabbitMQ.URL))
+			pubs = append(pubs, NewRabbitMQPublisher(cfg.RabbitMQ.URL, logger))
 		} else if to.SimpleMQ != nil {
 			pub, err := NewSimpleMQPublisher(cfg.SimpleMQ.APIURL, *to.SimpleMQ)
 			if err != nil {
@@ -229,5 +238,6 @@ func buildBridge(cfg *Config, bc BridgeConfig, m *Metrics) (*Bridge, error) {
 		srcAttrs: srcAttrs,
 		srcType:  srcType,
 		srcQueue: srcQueue,
+		logger:   logger,
 	}, nil
 }
