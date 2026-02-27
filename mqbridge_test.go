@@ -55,7 +55,7 @@ func requireRabbitMQ(t *testing.T) *amqp.Connection {
 
 func receiveOneFromSimpleMQ(t *testing.T, ctx context.Context, smqClient *message.Client, queueName string) string {
 	t.Helper()
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		time.Sleep(200 * time.Millisecond)
 		res, err := smqClient.ReceiveMessage(ctx, message.ReceiveMessageParams{
 			QueueName: message.QueueName(queueName),
