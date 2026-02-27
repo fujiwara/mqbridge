@@ -27,9 +27,46 @@ func NewRabbitMQSubscriber(url string, config FromRabbitMQConfig, logger *slog.L
 	}
 }
 
-// Subscribe starts consuming messages from the RabbitMQ queue.
-// It declares the exchange and queue, binds them, and calls the handler for each message.
+// Subscribe starts consuming messages from the RabbitMQ queue with automatic
+// reconnection on connection loss. It uses exponential backoff between retries.
 func (s *RabbitMQSubscriber) Subscribe(ctx context.Context, handler func(ctx context.Context, msg []byte) error) error {
+	const (
+		initialBackoff = 1 * time.Second
+		maxBackoff     = 30 * time.Second
+	)
+	backoff := initialBackoff
+	var attempt int
+	for {
+		start := time.Now()
+		err := s.subscribeOnce(ctx, handler)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		// Reset backoff if the connection was alive long enough,
+		// indicating a transient failure rather than a persistent one.
+		if time.Since(start) > maxBackoff {
+			backoff = initialBackoff
+			attempt = 0
+		}
+		attempt++
+		s.logger.Error("connection lost, reconnecting...", "queue", s.config.Queue, "error", err, "attempt", attempt, "backoff", backoff)
+		s.closeConn()
+
+		// Wait with backoff, respecting context cancellation.
+		timer := time.NewTimer(backoff)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+		backoff = min(backoff*2, maxBackoff)
+	}
+}
+
+// subscribeOnce connects to RabbitMQ, declares the exchange/queue, and consumes
+// messages until the connection is lost or the context is cancelled.
+func (s *RabbitMQSubscriber) subscribeOnce(ctx context.Context, handler func(ctx context.Context, msg []byte) error) error {
 	if err := s.connect(); err != nil {
 		return err
 	}
@@ -121,22 +158,22 @@ func (s *RabbitMQSubscriber) Subscribe(ctx context.Context, handler func(ctx con
 	}
 }
 
-// Close closes the RabbitMQ connection.
-func (s *RabbitMQSubscriber) Close() error {
-	var errs []error
+// closeConn closes the subscriber's channel and connection, ignoring errors.
+// It is safe to call multiple times.
+func (s *RabbitMQSubscriber) closeConn() {
 	if s.ch != nil {
-		if err := s.ch.Close(); err != nil {
-			errs = append(errs, err)
-		}
+		s.ch.Close()
+		s.ch = nil
 	}
 	if s.conn != nil {
-		if err := s.conn.Close(); err != nil {
-			errs = append(errs, err)
-		}
+		s.conn.Close()
+		s.conn = nil
 	}
-	if len(errs) > 0 {
-		return fmt.Errorf("errors closing RabbitMQ subscriber: %v", errs)
-	}
+}
+
+// Close closes the RabbitMQ connection.
+func (s *RabbitMQSubscriber) Close() error {
+	s.closeConn()
 	return nil
 }
 
