@@ -28,21 +28,21 @@ func newMetrics() (*Metrics, error) {
 		metric.WithDescription("Messages received from subscriber"),
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create messages.received counter: %w", err)
 	}
 
 	published, err := meter.Int64Counter("mqbridge.messages.published",
 		metric.WithDescription("Messages published to destination"),
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create messages.published counter: %w", err)
 	}
 
 	errors, err := meter.Int64Counter("mqbridge.messages.errors",
 		metric.WithDescription("Message processing errors"),
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create messages.errors counter: %w", err)
 	}
 
 	duration, err := meter.Float64Histogram("mqbridge.message.processing.duration",
@@ -50,7 +50,7 @@ func newMetrics() (*Metrics, error) {
 		metric.WithUnit("s"),
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create processing.duration histogram: %w", err)
 	}
 
 	return &Metrics{
@@ -82,7 +82,7 @@ func setupMeterProvider(ctx context.Context) (func(context.Context) error, error
 		return noop, fmt.Errorf("unsupported OTEL_EXPORTER_OTLP_PROTOCOL: %s", protocol)
 	}
 	if err != nil {
-		return noop, err
+		return noop, fmt.Errorf("failed to create OTLP metrics exporter: %w", err)
 	}
 
 	provider := sdkmetric.NewMeterProvider(

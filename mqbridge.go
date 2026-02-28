@@ -106,7 +106,7 @@ type App struct {
 func New(cfg *Config) (*App, error) {
 	bridges, err := buildBridges(cfg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to build bridges: %w", err)
 	}
 	return &App{
 		Config:  cfg,

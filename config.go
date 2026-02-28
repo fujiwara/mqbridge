@@ -104,7 +104,7 @@ func evaluateJsonnet(ctx context.Context, path string) ([]byte, error) {
 	cli.SetWriter(&buf)
 	cli.AddFunctions(secretNativeFunction(ctx))
 	if err := cli.Run(ctx); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to evaluate jsonnet %q: %w", path, err)
 	}
 	return buf.Bytes(), nil
 }
