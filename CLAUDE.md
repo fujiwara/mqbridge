@@ -19,6 +19,7 @@ go fmt ./...
 ## Architecture
 
 - `mqbridge.go` — `Subscriber`/`Publisher` interfaces, `Bridge`, `App` orchestration
+- `export_test.go` — Test helpers that need access to unexported fields (e.g. `NewBridgeForTest`)
 - `config.go` — Config structs, Jsonnet loader (`jsonnet-armed`)
 - `cli.go` — CLI definition (`kong`), `RunCLI()` entry point
 - `metrics.go` — OpenTelemetry metrics instruments and setup
@@ -44,6 +45,7 @@ go fmt ./...
 - Run `go fix ./...` before commit to apply automatic modernizations (e.g. range over int)
 - Constants and default values should come from upstream SDK when available, not be hardcoded
 - When adding a new feature, add tests that cover both single and multiple destinations (fan-out)
+- Use `export_test.go` (package `mqbridge`, not `mqbridge_test`) for test helpers that need access to unexported fields. Do not put test-only helpers in production code files
 
 ## Dependencies
 
