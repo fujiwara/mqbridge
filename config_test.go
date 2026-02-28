@@ -89,6 +89,86 @@ func TestConfigValidation(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "valid simplemq to simplemq",
+			config: mqbridge.Config{
+				RabbitMQ: mqbridge.RabbitMQConfig{URL: "amqp://localhost"},
+				Bridges: []mqbridge.BridgeConfig{
+					{
+						From: mqbridge.FromConfig{
+							SimpleMQ: &mqbridge.FromSimpleMQConfig{
+								Queue:  "q",
+								APIKey: "key",
+							},
+						},
+						To: []mqbridge.ToConfig{
+							{SimpleMQ: &mqbridge.ToSimpleMQConfig{Queue: "dest", APIKey: "key"}},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "simplemq to simplemq missing dest queue",
+			config: mqbridge.Config{
+				RabbitMQ: mqbridge.RabbitMQConfig{URL: "amqp://localhost"},
+				Bridges: []mqbridge.BridgeConfig{
+					{
+						From: mqbridge.FromConfig{
+							SimpleMQ: &mqbridge.FromSimpleMQConfig{
+								Queue:  "q",
+								APIKey: "key",
+							},
+						},
+						To: []mqbridge.ToConfig{
+							{SimpleMQ: &mqbridge.ToSimpleMQConfig{APIKey: "key"}},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "simplemq to simplemq missing dest api_key",
+			config: mqbridge.Config{
+				RabbitMQ: mqbridge.RabbitMQConfig{URL: "amqp://localhost"},
+				Bridges: []mqbridge.BridgeConfig{
+					{
+						From: mqbridge.FromConfig{
+							SimpleMQ: &mqbridge.FromSimpleMQConfig{
+								Queue:  "q",
+								APIKey: "key",
+							},
+						},
+						To: []mqbridge.ToConfig{
+							{SimpleMQ: &mqbridge.ToSimpleMQConfig{Queue: "dest"}},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "rabbitmq to rabbitmq not supported",
+			config: mqbridge.Config{
+				RabbitMQ: mqbridge.RabbitMQConfig{URL: "amqp://localhost"},
+				Bridges: []mqbridge.BridgeConfig{
+					{
+						From: mqbridge.FromConfig{
+							RabbitMQ: &mqbridge.FromRabbitMQConfig{
+								Queue:    "q",
+								Exchange: "ex",
+							},
+						},
+						To: []mqbridge.ToConfig{
+							{RabbitMQ: &mqbridge.ToRabbitMQConfig{}},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
 			name: "valid simplemq to rabbitmq",
 			config: mqbridge.Config{
 				RabbitMQ: mqbridge.RabbitMQConfig{URL: "amqp://localhost"},

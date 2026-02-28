@@ -136,45 +136,63 @@ func (c *Config) Validate() error {
 }
 
 func (b *BridgeConfig) validate() error {
-	if b.From.RabbitMQ == nil && b.From.SimpleMQ == nil {
-		return fmt.Errorf("from must specify either rabbitmq or simplemq")
-	}
-	if b.From.RabbitMQ != nil && b.From.SimpleMQ != nil {
-		return fmt.Errorf("from must specify only one of rabbitmq or simplemq")
+	if err := b.From.validate(); err != nil {
+		return err
 	}
 	if len(b.To) == 0 {
 		return fmt.Errorf("at least one destination is required")
 	}
-	if b.From.RabbitMQ != nil {
-		if b.From.RabbitMQ.Queue == "" {
-			return fmt.Errorf("from.rabbitmq.queue is required")
-		}
-		if b.From.RabbitMQ.Exchange == "" {
-			return fmt.Errorf("from.rabbitmq.exchange is required")
-		}
-		for j, to := range b.To {
-			if to.SimpleMQ == nil {
-				return fmt.Errorf("to[%d]: RabbitMQ source requires SimpleMQ destination", j)
-			}
-			if to.SimpleMQ.Queue == "" {
-				return fmt.Errorf("to[%d]: simplemq.queue is required", j)
-			}
-			if to.SimpleMQ.APIKey == "" {
-				return fmt.Errorf("to[%d]: simplemq.api_key is required", j)
-			}
+	for j, to := range b.To {
+		if err := to.validate(j, b.From); err != nil {
+			return err
 		}
 	}
-	if b.From.SimpleMQ != nil {
-		if b.From.SimpleMQ.Queue == "" {
+	return nil
+}
+
+func (f *FromConfig) validate() error {
+	if f.RabbitMQ == nil && f.SimpleMQ == nil {
+		return fmt.Errorf("from must specify either rabbitmq or simplemq")
+	}
+	if f.RabbitMQ != nil && f.SimpleMQ != nil {
+		return fmt.Errorf("from must specify only one of rabbitmq or simplemq")
+	}
+	if f.RabbitMQ != nil {
+		if f.RabbitMQ.Queue == "" {
+			return fmt.Errorf("from.rabbitmq.queue is required")
+		}
+		if f.RabbitMQ.Exchange == "" {
+			return fmt.Errorf("from.rabbitmq.exchange is required")
+		}
+	}
+	if f.SimpleMQ != nil {
+		if f.SimpleMQ.Queue == "" {
 			return fmt.Errorf("from.simplemq.queue is required")
 		}
-		if b.From.SimpleMQ.APIKey == "" {
+		if f.SimpleMQ.APIKey == "" {
 			return fmt.Errorf("from.simplemq.api_key is required")
 		}
-		for j, to := range b.To {
-			if to.RabbitMQ == nil {
-				return fmt.Errorf("to[%d]: SimpleMQ source requires RabbitMQ destination", j)
-			}
+	}
+	return nil
+}
+
+func (t *ToConfig) validate(index int, from FromConfig) error {
+	if from.RabbitMQ != nil {
+		if t.SimpleMQ == nil {
+			return fmt.Errorf("to[%d]: RabbitMQ to RabbitMQ bridging is not supported (use RabbitMQ exchange bindings or the shovel plugin instead), RabbitMQ source requires SimpleMQ destination", index)
+		}
+	}
+	if from.SimpleMQ != nil {
+		if t.RabbitMQ == nil && t.SimpleMQ == nil {
+			return fmt.Errorf("to[%d]: destination must specify rabbitmq or simplemq", index)
+		}
+	}
+	if t.SimpleMQ != nil {
+		if t.SimpleMQ.Queue == "" {
+			return fmt.Errorf("to[%d]: simplemq.queue is required", index)
+		}
+		if t.SimpleMQ.APIKey == "" {
+			return fmt.Errorf("to[%d]: simplemq.api_key is required", index)
 		}
 	}
 	return nil
