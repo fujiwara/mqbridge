@@ -114,43 +114,32 @@ func New(cfg *Config) (*App, error) {
 	}, nil
 }
 
-// Run starts all bridges concurrently and waits for them to complete or context cancellation.
-// If any bridge fails, all other bridges are cancelled.
+// Run starts all bridges concurrently and waits for context cancellation.
 func (a *App) Run(ctx context.Context) error {
 	slog.Info("starting mqbridge", "bridges", len(a.bridges))
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
 	var wg sync.WaitGroup
-	errCh := make(chan error, len(a.bridges))
-
 	for _, b := range a.bridges {
 		wg.Add(1)
 		go func(bridge *Bridge) {
 			defer wg.Done()
 			bridge.logger.Info("starting bridge")
-			if err := bridge.Run(ctx); err != nil && ctx.Err() == nil {
-				bridge.logger.Error("bridge error", "error", err)
-				errCh <- err
-				cancel()
+			if err := bridge.Run(ctx); err != nil {
+				if ctx.Err() != nil {
+					return // expected: context cancelled by signal
+				}
+				panic(fmt.Sprintf("unexpected bridge error: %v", err))
 			}
 		}(b)
 	}
 
 	wg.Wait()
-	close(errCh)
 
 	// Close all bridges
 	for _, b := range a.bridges {
 		if err := b.Close(); err != nil {
 			slog.Error("error closing bridge", "error", err)
 		}
-	}
-
-	// Return first error if any
-	for err := range errCh {
-		return err
 	}
 	return nil
 }
