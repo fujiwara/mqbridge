@@ -179,7 +179,7 @@ func (f *FromConfig) validate() error {
 func (t *ToConfig) validate(index int, from FromConfig) error {
 	if from.RabbitMQ != nil {
 		if t.SimpleMQ == nil {
-			return fmt.Errorf("to[%d]: RabbitMQ source requires SimpleMQ destination", index)
+			return fmt.Errorf("to[%d]: RabbitMQ to RabbitMQ bridging is not supported (use RabbitMQ exchange bindings or the shovel plugin instead), RabbitMQ source requires SimpleMQ destination", index)
 		}
 	}
 	if from.SimpleMQ != nil {

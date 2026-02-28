@@ -149,6 +149,26 @@ func TestConfigValidation(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "rabbitmq to rabbitmq not supported",
+			config: mqbridge.Config{
+				RabbitMQ: mqbridge.RabbitMQConfig{URL: "amqp://localhost"},
+				Bridges: []mqbridge.BridgeConfig{
+					{
+						From: mqbridge.FromConfig{
+							RabbitMQ: &mqbridge.FromRabbitMQConfig{
+								Queue:    "q",
+								Exchange: "ex",
+							},
+						},
+						To: []mqbridge.ToConfig{
+							{RabbitMQ: &mqbridge.ToRabbitMQConfig{}},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
 			name: "valid simplemq to rabbitmq",
 			config: mqbridge.Config{
 				RabbitMQ: mqbridge.RabbitMQConfig{URL: "amqp://localhost"},

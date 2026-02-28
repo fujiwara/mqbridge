@@ -34,6 +34,7 @@ Each bridge has one **subscriber** (source) and one or more **publishers** (dest
 - **RabbitMQ → SimpleMQ**: Consume from a RabbitMQ queue and forward messages to one or more SimpleMQ queues (fan-out).
 - **SimpleMQ → RabbitMQ**: Poll a SimpleMQ queue and publish messages to RabbitMQ with exchange/routing key determined by message content.
 - **SimpleMQ → SimpleMQ**: Poll a SimpleMQ queue and forward messages to one or more SimpleMQ queues (fan-out). Useful as a fan-out mechanism since SimpleMQ has no native fan-out support.
+- **RabbitMQ → RabbitMQ**: Not supported. Use RabbitMQ's built-in features such as [exchange bindings](https://www.rabbitmq.com/docs/e2e) or the [shovel plugin](https://www.rabbitmq.com/docs/shovel) instead.
 - **Automatic reconnection**: RabbitMQ subscriber and publisher automatically reconnect with exponential backoff (1s–30s) on connection loss.
 - **Graceful shutdown**: On SIGTERM/SIGINT, waits for in-flight messages to complete before exiting.
 - **Named bridges**: Optional `name` field per bridge for readable log output.
@@ -153,7 +154,7 @@ local must_env = std.native('must_env');
 ### Configuration Notes
 
 - `rabbitmq.url` is always required, even if no RabbitMQ bridge is defined.
-- RabbitMQ source requires SimpleMQ destinations. SimpleMQ source supports both RabbitMQ and SimpleMQ destinations. RabbitMQ → RabbitMQ bridging is not supported.
+- RabbitMQ source requires SimpleMQ destinations. SimpleMQ source supports both RabbitMQ and SimpleMQ destinations. RabbitMQ → RabbitMQ bridging is not supported; use RabbitMQ's built-in features such as [exchange bindings](https://www.rabbitmq.com/docs/e2e) or the [shovel plugin](https://www.rabbitmq.com/docs/shovel) instead.
 - `exchange_type` defaults to `direct` if omitted.
 - `exchange_passive` (default: `false`): When `true`, the subscriber uses `ExchangeDeclarePassive` instead of `ExchangeDeclare`. This verifies the exchange exists without attempting to create it or modify its properties. Useful when the exchange is managed externally and its properties (type, durable, etc.) may differ from what mqbridge would declare, avoiding `PRECONDITION_FAILED` errors.
 - `routing_key` defaults to `#` if omitted.
