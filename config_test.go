@@ -49,11 +49,42 @@ func TestConfigValidation(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "missing rabbitmq url",
+			name: "missing rabbitmq url with rabbitmq bridge",
 			config: mqbridge.Config{
-				Bridges: []mqbridge.BridgeConfig{{}},
+				Bridges: []mqbridge.BridgeConfig{
+					{
+						From: mqbridge.FromConfig{
+							RabbitMQ: &mqbridge.FromRabbitMQConfig{
+								Queue:    "q",
+								Exchange: "ex",
+							},
+						},
+						To: []mqbridge.ToConfig{
+							{SimpleMQ: &mqbridge.ToSimpleMQConfig{Queue: "dest", APIKey: "key"}},
+						},
+					},
+				},
 			},
 			wantErr: true,
+		},
+		{
+			name: "simplemq only without rabbitmq url",
+			config: mqbridge.Config{
+				Bridges: []mqbridge.BridgeConfig{
+					{
+						From: mqbridge.FromConfig{
+							SimpleMQ: &mqbridge.FromSimpleMQConfig{
+								Queue:  "q",
+								APIKey: "key",
+							},
+						},
+						To: []mqbridge.ToConfig{
+							{SimpleMQ: &mqbridge.ToSimpleMQConfig{Queue: "dest", APIKey: "key"}},
+						},
+					},
+				},
+			},
+			wantErr: false,
 		},
 		{
 			name: "empty from",
