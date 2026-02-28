@@ -35,6 +35,12 @@ Each bridge has one **subscriber** (source) and one or more **publishers** (dest
 - **Jsonnet configuration**: Use [jsonnet-armed](https://github.com/fujiwara/jsonnet-armed) for configuration with environment variable support (`env()`, `must_env()`).
 - **Secret Manager integration**: Retrieve credentials from [Sakura Cloud Secret Manager](https://manual.sakura.ad.jp/cloud/appliance/secretsmanager/index.html) using `secret()` native function in Jsonnet.
 
+## Message Delivery
+
+mqbridge provides **at-least-once** delivery semantics. Messages are acknowledged to the source only after all destinations have been published to successfully.
+
+When a bridge has multiple destinations (fan-out), publishes are performed **sequentially**. If a publish to one destination fails, the remaining destinations are skipped, and the message is returned to the source queue for redelivery. This means destinations that were already published to before the failure will receive **duplicate** messages on retry. Consumers should handle messages idempotently.
+
 ## Installation
 
 ### Homebrew
@@ -195,7 +201,9 @@ The following metrics are exported:
 | `mqbridge.messages.received` | Counter | Messages received from subscriber | `bridge`, `source_type`, `source_queue` |
 | `mqbridge.messages.published` | Counter | Messages published to destination | `bridge`, `destination_type`, `destination_queue` |
 | `mqbridge.messages.errors` | Counter | Message processing errors | `bridge`, `source_type`, `source_queue` |
-| `mqbridge.message.processing.duration` | Histogram | Processing duration in seconds | `bridge`, `source_type`, `source_queue` |
+| `mqbridge.message.processing.duration` | Histogram | Time to publish to all destinations (seconds) | `bridge`, `source_type`, `source_queue` |
+
+`processing.duration` measures only the publish phase (from after the message is received to after all destinations have been published to). It does not include subscriber wait time.
 
 Attribute values are derived from the bridge configuration and message content. `bridge` is the bridge name (or index if unnamed). `source_type` / `destination_type` is `rabbitmq` or `simplemq`. `source_queue` is the source queue name. `destination_queue` is the SimpleMQ queue name, or the exchange name for RabbitMQ (from each message).
 
