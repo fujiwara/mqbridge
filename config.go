@@ -121,9 +121,6 @@ func parseConfig(data []byte) (*Config, error) {
 
 // Validate checks the configuration for correctness.
 func (c *Config) Validate() error {
-	if c.RabbitMQ.URL == "" {
-		return fmt.Errorf("rabbitmq.url is required")
-	}
 	if len(c.Bridges) == 0 {
 		return fmt.Errorf("at least one bridge is required")
 	}
@@ -131,8 +128,23 @@ func (c *Config) Validate() error {
 		if err := b.validate(); err != nil {
 			return fmt.Errorf("bridges[%d]: %w", i, err)
 		}
+		if b.usesRabbitMQ() && c.RabbitMQ.URL == "" {
+			return fmt.Errorf("rabbitmq.url is required when any bridge uses RabbitMQ")
+		}
 	}
 	return nil
+}
+
+func (b *BridgeConfig) usesRabbitMQ() bool {
+	if b.From.RabbitMQ != nil {
+		return true
+	}
+	for _, to := range b.To {
+		if to.RabbitMQ != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func (b *BridgeConfig) validate() error {
