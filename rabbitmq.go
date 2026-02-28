@@ -223,11 +223,11 @@ func NewRabbitMQPublisher(url string, logger *slog.Logger) *RabbitMQPublisher {
 // Publish parses the message JSON and publishes to the specified exchange/routing key.
 func (p *RabbitMQPublisher) Publish(ctx context.Context, msg []byte) (*PublishResult, error) {
 	if err := p.ensureConnected(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to ensure RabbitMQ connection: %w", err)
 	}
 	rmqMsg, err := ParseRabbitMQMessage(msg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse message: %w", err)
 	}
 	headers := make(amqp.Table)
 	for k, v := range rmqMsg.Headers {
@@ -246,7 +246,7 @@ func (p *RabbitMQPublisher) Publish(ctx context.Context, msg []byte) (*PublishRe
 			Timestamp:    time.Now(),
 		},
 	); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to publish to RabbitMQ exchange %q: %w", rmqMsg.Exchange, err)
 	}
 	return &PublishResult{
 		Destination: rmqMsg.Exchange,
