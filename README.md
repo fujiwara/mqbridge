@@ -1,6 +1,6 @@
 # mqbridge
 
-A message bridge between RabbitMQ and SimpleMQ. Define multiple forwarding rules (bridges) in a configuration file and run them concurrently.
+A message bridge between [RabbitMQ](https://www.rabbitmq.com/) and [SimpleMQ (Sakura Cloud)](https://manual.sakura.ad.jp/cloud/appliance/simplemq/index.html). Define multiple forwarding rules (bridges) in a configuration file and run them concurrently.
 
 ## Overview
 
