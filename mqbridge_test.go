@@ -226,6 +226,90 @@ func TestRabbitMQToSimpleMQFanout(t *testing.T) {
 	bridgeCancel()
 }
 
+func TestRabbitMQToSimpleMQExchangePassive(t *testing.T) {
+	conn := requireRabbitMQ(t)
+	defer conn.Close()
+
+	smqServer := localserver.NewServer()
+	defer smqServer.Close()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	exchangeName := fmt.Sprintf("test-passive-exchange-%d", time.Now().UnixNano())
+	queueName := fmt.Sprintf("test-passive-queue-%d", time.Now().UnixNano())
+	destQueue := fmt.Sprintf("test-passive-dest-%d", time.Now().UnixNano())
+
+	// Pre-declare the exchange so that exchange_passive can find it.
+	ch, err := conn.Channel()
+	if err != nil {
+		t.Fatalf("failed to open channel: %v", err)
+	}
+	err = ch.ExchangeDeclare(exchangeName, "topic", true, false, false, false, nil)
+	if err != nil {
+		t.Fatalf("failed to pre-declare exchange: %v", err)
+	}
+	ch.Close()
+
+	cfg := &mqbridge.Config{
+		RabbitMQ: mqbridge.RabbitMQConfig{URL: testRabbitMQURL},
+		SimpleMQ: mqbridge.SimpleMQConfig{APIURL: smqServer.URL()},
+		Bridges: []mqbridge.BridgeConfig{
+			{
+				From: mqbridge.FromConfig{
+					RabbitMQ: &mqbridge.FromRabbitMQConfig{
+						Queue:           queueName,
+						Exchange:        exchangeName,
+						ExchangeType:    "topic",
+						RoutingKey:      "#",
+						ExchangePassive: true,
+					},
+				},
+				To: []mqbridge.ToConfig{
+					{SimpleMQ: &mqbridge.ToSimpleMQConfig{Queue: destQueue, APIKey: testAPIKey}},
+				},
+			},
+		},
+	}
+
+	app, err := mqbridge.New(cfg)
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+
+	bridgeCtx, bridgeCancel := context.WithCancel(ctx)
+	defer bridgeCancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- app.Run(bridgeCtx)
+	}()
+
+	time.Sleep(500 * time.Millisecond)
+
+	ch, err = conn.Channel()
+	if err != nil {
+		t.Fatalf("failed to open channel: %v", err)
+	}
+	defer ch.Close()
+
+	testBody := fmt.Sprintf("msg-%s-%d", t.Name(), time.Now().UnixNano())
+	err = ch.PublishWithContext(ctx, exchangeName, "test.key", false, false, amqp.Publishing{
+		Body: []byte(testBody),
+	})
+	if err != nil {
+		t.Fatalf("failed to publish: %v", err)
+	}
+
+	smqClient := newSimpleMQTestClient(t, smqServer.URL())
+	received := receiveOneFromSimpleMQ(t, ctx, smqClient, destQueue)
+	if received != testBody {
+		t.Errorf("expected %q, got %q", testBody, received)
+	}
+
+	bridgeCancel()
+}
+
 func TestSimpleMQToRabbitMQ(t *testing.T) {
 	conn := requireRabbitMQ(t)
 	defer conn.Close()

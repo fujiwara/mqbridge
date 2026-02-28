@@ -100,8 +100,9 @@ local must_env = std.native('must_env');
         rabbitmq: {
           queue: 'source-queue',
           exchange: 'source-exchange',
-          exchange_type: 'topic',   // direct, fanout, topic, headers
+          exchange_type: 'topic',     // direct, fanout, topic, headers
           routing_key: '#',
+          exchange_passive: false,    // true to verify exchange exists without declaring
         },
       },
       to: [
@@ -126,6 +127,15 @@ local must_env = std.native('must_env');
   ],
 }
 ```
+
+### Configuration Notes
+
+- `rabbitmq.url` is always required, even if no RabbitMQ bridge is defined.
+- Bridge direction is fixed: RabbitMQ source requires SimpleMQ destinations, and SimpleMQ source requires RabbitMQ destinations. Same-type bridging (e.g. RabbitMQ → RabbitMQ) is not supported.
+- `exchange_type` defaults to `direct` if omitted.
+- `exchange_passive` (default: `false`): When `true`, the subscriber uses `ExchangeDeclarePassive` instead of `ExchangeDeclare`. This verifies the exchange exists without attempting to create it or modify its properties. Useful when the exchange is managed externally and its properties (type, durable, etc.) may differ from what mqbridge would declare, avoiding `PRECONDITION_FAILED` errors.
+- `routing_key` defaults to `#` if omitted.
+- `polling_interval` defaults to `1s`. Invalid values silently fall back to `1s`.
 
 ### Secret Manager Integration
 
@@ -167,9 +177,15 @@ local secret = std.native('secret');
 }
 ```
 
+### SimpleMQ Message Encoding
+
+SimpleMQ message content must be **base64-encoded**. When mqbridge receives a message from SimpleMQ, it decodes the content from base64 before processing. If the content is not valid base64, the message is logged as an error and **deleted** from the queue to prevent infinite retry loops.
+
+When mqbridge publishes to SimpleMQ (RabbitMQ → SimpleMQ direction), it automatically base64-encodes the message body. External producers sending messages to a SimpleMQ queue consumed by mqbridge must also base64-encode the content.
+
 ### SimpleMQ → RabbitMQ Message Format
 
-Messages from SimpleMQ to RabbitMQ must be in the following JSON format:
+Messages from SimpleMQ to RabbitMQ must be base64-encoded JSON in the following format:
 
 ```json
 {

@@ -48,10 +48,11 @@ type ToConfig struct {
 
 // FromRabbitMQConfig defines a RabbitMQ source.
 type FromRabbitMQConfig struct {
-	Queue        string `json:"queue"`
-	Exchange     string `json:"exchange"`
-	ExchangeType string `json:"exchange_type"`
-	RoutingKey   string `json:"routing_key"`
+	Queue           string `json:"queue"`
+	Exchange        string `json:"exchange"`
+	ExchangeType    string `json:"exchange_type"`
+	RoutingKey      string `json:"routing_key"`
+	ExchangePassive bool   `json:"exchange_passive"`
 }
 
 // FromSimpleMQConfig defines a SimpleMQ source.

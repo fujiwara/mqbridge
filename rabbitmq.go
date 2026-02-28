@@ -78,15 +78,29 @@ func (s *RabbitMQSubscriber) subscribeOnce(ctx context.Context, handler func(ctx
 	if routingKey == "" {
 		routingKey = "#"
 	}
-	if err := s.ch.ExchangeDeclare(
-		s.config.Exchange,
-		exchangeType,
-		true,  // durable
-		false, // auto-deleted
-		false, // internal
-		false, // no-wait
-		nil,
-	); err != nil {
+	var err error
+	if s.config.ExchangePassive {
+		err = s.ch.ExchangeDeclarePassive(
+			s.config.Exchange,
+			exchangeType,
+			true,  // durable
+			false, // auto-deleted
+			false, // internal
+			false, // no-wait
+			nil,
+		)
+	} else {
+		err = s.ch.ExchangeDeclare(
+			s.config.Exchange,
+			exchangeType,
+			true,  // durable
+			false, // auto-deleted
+			false, // internal
+			false, // no-wait
+			nil,
+		)
+	}
+	if err != nil {
 		return fmt.Errorf("failed to declare exchange %q: %w", s.config.Exchange, err)
 	}
 	if _, err := s.ch.QueueDeclare(
