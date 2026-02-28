@@ -177,9 +177,15 @@ local secret = std.native('secret');
 }
 ```
 
+### SimpleMQ Message Encoding
+
+SimpleMQ message content must be **base64-encoded**. When mqbridge receives a message from SimpleMQ, it decodes the content from base64 before processing. If the content is not valid base64, the message is logged as an error and **deleted** from the queue to prevent infinite retry loops.
+
+When mqbridge publishes to SimpleMQ (RabbitMQ → SimpleMQ direction), it automatically base64-encodes the message body. External producers sending messages to a SimpleMQ queue consumed by mqbridge must also base64-encode the content.
+
 ### SimpleMQ → RabbitMQ Message Format
 
-Messages from SimpleMQ to RabbitMQ must be in the following JSON format:
+Messages from SimpleMQ to RabbitMQ must be base64-encoded JSON in the following format:
 
 ```json
 {

@@ -85,7 +85,17 @@ func (s *SimpleMQSubscriber) poll(ctx context.Context, handler func(ctx context.
 	for _, msg := range recvOK.Messages {
 		body, err := base64.StdEncoding.DecodeString(string(msg.Content))
 		if err != nil {
-			s.logger.Error("failed to decode message content", "queue", s.queueName, "error", err)
+			s.logger.Error("failed to decode message content, deleting invalid message",
+				"queue", s.queueName,
+				"messageId", msg.ID,
+				"error", err,
+			)
+			if _, delErr := s.client.DeleteMessage(msgCtx, message.DeleteMessageParams{
+				QueueName: message.QueueName(s.queueName),
+				MessageId: msg.ID,
+			}); delErr != nil {
+				s.logger.Error("failed to delete invalid message", "queue", s.queueName, "messageId", msg.ID, "error", delErr)
+			}
 			continue
 		}
 		if err := handler(msgCtx, body); err != nil {
