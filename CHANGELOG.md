@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.0.3](https://github.com/fujiwara/mqbridge/compare/v0.0.2...v0.0.3) - 2026-02-28
+- Add architecture overview diagram and document exported struct by @fujiwara in https://github.com/fujiwara/mqbridge/pull/11
+- Add bridge attribute to OpenTelemetry metrics by @fujiwara in https://github.com/fujiwara/mqbridge/pull/13
+- Document at-least-once delivery semantics and duration metric scope by @fujiwara in https://github.com/fujiwara/mqbridge/pull/14
+- Add exchange_passive option and fix base64 decode error handling by @fujiwara in https://github.com/fujiwara/mqbridge/pull/15
+- Add SimpleMQ to SimpleMQ bridging support by @fujiwara in https://github.com/fujiwara/mqbridge/pull/16
+- Make rabbitmq.url optional when no bridge uses RabbitMQ by @fujiwara in https://github.com/fujiwara/mqbridge/pull/17
+
 ## [v0.0.2](https://github.com/fujiwara/mqbridge/compare/v0.0.1...v0.0.2) - 2026-02-27
 - Add --log-format flag with sloghandler by @fujiwara in https://github.com/fujiwara/mqbridge/pull/5
 - Support environment variables for CLI flags by @fujiwara in https://github.com/fujiwara/mqbridge/pull/7
