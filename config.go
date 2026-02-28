@@ -172,8 +172,16 @@ func (b *BridgeConfig) validate() error {
 			return fmt.Errorf("from.simplemq.api_key is required")
 		}
 		for j, to := range b.To {
-			if to.RabbitMQ == nil {
-				return fmt.Errorf("to[%d]: SimpleMQ source requires RabbitMQ destination", j)
+			if to.RabbitMQ == nil && to.SimpleMQ == nil {
+				return fmt.Errorf("to[%d]: destination must specify rabbitmq or simplemq", j)
+			}
+			if to.SimpleMQ != nil {
+				if to.SimpleMQ.Queue == "" {
+					return fmt.Errorf("to[%d]: simplemq.queue is required", j)
+				}
+				if to.SimpleMQ.APIKey == "" {
+					return fmt.Errorf("to[%d]: simplemq.api_key is required", j)
+				}
 			}
 		}
 	}
