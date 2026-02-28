@@ -2,6 +2,27 @@
 
 A message bridge between RabbitMQ and SimpleMQ. Define multiple forwarding rules (bridges) in a configuration file and run them concurrently.
 
+## Overview
+
+```
+                         mqbridge
+              ┌─────────────────────────┐
+              │                         │
+              │   ┌───────────────┐     │
+ RabbitMQ ────┼──►│  Bridge (1:N) │──┬──┼────► SimpleMQ
+   queue      │   └───────────────┘  │  │       queue
+              │                      └──┼────► SimpleMQ
+              │                         │       queue
+              │   ┌───────────────┐     │
+ SimpleMQ ────┼──►│  Bridge (1:1) │────-┼────► RabbitMQ
+   queue      │   └───────────────┘     │    exchange/routing_key
+              │          ...            │
+              └─────────────────────────┘
+                    (concurrent bridges)
+```
+
+Each bridge has one **subscriber** (source) and one or more **publishers** (destinations). Multiple bridges run concurrently within a single mqbridge process.
+
 ## Features
 
 - **RabbitMQ → SimpleMQ**: Consume from a RabbitMQ queue and forward messages to one or more SimpleMQ queues (fan-out).
@@ -156,6 +177,8 @@ Messages from SimpleMQ to RabbitMQ must be in the following JSON format:
 - `exchange` and `routing_key` are required.
 - `headers` is optional.
 - The content of `body` is published to RabbitMQ.
+
+This message format is defined as the exported [`RabbitMQMessage`](https://pkg.go.dev/github.com/fujiwara/mqbridge#RabbitMQMessage) struct in the `mqbridge` package. You can use `mqbridge.RabbitMQMessage` and [`mqbridge.ParseRabbitMQMessage()`](https://pkg.go.dev/github.com/fujiwara/mqbridge#ParseRabbitMQMessage) to construct or parse messages programmatically.
 
 ## Metrics
 
