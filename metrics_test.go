@@ -164,6 +164,7 @@ func TestMetricsSingleDestination(t *testing.T) {
 
 	// Verify destination attributes
 	dstAttrs := attribute.NewSet(
+		attribute.String("bridge", "test"),
 		attribute.String("destination_type", "simplemq"),
 		attribute.String("destination_queue", "dest-queue"),
 	)
@@ -223,6 +224,7 @@ func TestMetricsFanout(t *testing.T) {
 	// Verify per-destination attributes
 	for _, dq := range []string{"dest-1", "dest-2", "dest-3"} {
 		attrs := attribute.NewSet(
+			attribute.String("bridge", "test"),
 			attribute.String("destination_type", "simplemq"),
 			attribute.String("destination_queue", dq),
 		)

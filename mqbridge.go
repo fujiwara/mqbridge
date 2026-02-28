@@ -32,13 +32,14 @@ type Publisher interface {
 
 // Bridge connects one Subscriber to multiple Publishers.
 type Bridge struct {
-	From     Subscriber
-	To       []Publisher
-	metrics  *Metrics
-	srcAttrs attribute.Set
-	srcType  string
-	srcQueue string
-	logger   *slog.Logger
+	From       Subscriber
+	To         []Publisher
+	metrics    *Metrics
+	srcAttrs   attribute.Set
+	srcType    string
+	srcQueue   string
+	bridgeName string
+	logger     *slog.Logger
 }
 
 // Run starts the bridge, consuming messages from the subscriber
@@ -63,6 +64,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 				return fmt.Errorf("publish error: %w", err)
 			}
 			dstAttrs := attribute.NewSet(
+				attribute.String("bridge", b.bridgeName),
 				attribute.String("destination_type", pub.Type()),
 				attribute.String("destination_queue", result.Destination),
 			)
@@ -153,25 +155,6 @@ func (a *App) Run(ctx context.Context) error {
 	return nil
 }
 
-// NewBridgeForTest creates a Bridge with the given subscriber, publishers, and metric attributes.
-// This is intended for testing only.
-func NewBridgeForTest(sub Subscriber, pubs []Publisher, srcType, srcQueue string) *Bridge {
-	m, _ := newMetrics()
-	srcAttrs := attribute.NewSet(
-		attribute.String("source_type", srcType),
-		attribute.String("source_queue", srcQueue),
-	)
-	return &Bridge{
-		From:     sub,
-		To:       pubs,
-		metrics:  m,
-		srcAttrs: srcAttrs,
-		srcType:  srcType,
-		srcQueue: srcQueue,
-		logger:   slog.Default().With("bridge", "test"),
-	}
-}
-
 func buildBridges(cfg *Config) ([]*Bridge, error) {
 	m, err := newMetrics()
 	if err != nil {
@@ -179,14 +162,14 @@ func buildBridges(cfg *Config) ([]*Bridge, error) {
 	}
 	var bridges []*Bridge
 	for i, bc := range cfg.Bridges {
-		var bridgeLabel any
+		var bridgeLabel string
 		if bc.Name != "" {
 			bridgeLabel = bc.Name
 		} else {
-			bridgeLabel = i
+			bridgeLabel = fmt.Sprintf("%d", i)
 		}
 		logger := slog.Default().With("bridge", bridgeLabel)
-		bridge, err := buildBridge(cfg, bc, m, logger)
+		bridge, err := buildBridge(cfg, bc, m, bridgeLabel, logger)
 		if err != nil {
 			return nil, fmt.Errorf("bridges[%d]: %w", i, err)
 		}
@@ -195,7 +178,7 @@ func buildBridges(cfg *Config) ([]*Bridge, error) {
 	return bridges, nil
 }
 
-func buildBridge(cfg *Config, bc BridgeConfig, m *Metrics, logger *slog.Logger) (*Bridge, error) {
+func buildBridge(cfg *Config, bc BridgeConfig, m *Metrics, bridgeLabel string, logger *slog.Logger) (*Bridge, error) {
 	var sub Subscriber
 	var pubs []Publisher
 
@@ -215,6 +198,7 @@ func buildBridge(cfg *Config, bc BridgeConfig, m *Metrics, logger *slog.Logger) 
 	}
 
 	srcAttrs := attribute.NewSet(
+		attribute.String("bridge", bridgeLabel),
 		attribute.String("source_type", srcType),
 		attribute.String("source_queue", srcQueue),
 	)
@@ -232,12 +216,13 @@ func buildBridge(cfg *Config, bc BridgeConfig, m *Metrics, logger *slog.Logger) 
 	}
 
 	return &Bridge{
-		From:     sub,
-		To:       pubs,
-		metrics:  m,
-		srcAttrs: srcAttrs,
-		srcType:  srcType,
-		srcQueue: srcQueue,
-		logger:   logger,
+		From:       sub,
+		To:         pubs,
+		metrics:    m,
+		srcAttrs:   srcAttrs,
+		srcType:    srcType,
+		srcQueue:   srcQueue,
+		bridgeName: bridgeLabel,
+		logger:     logger,
 	}, nil
 }
