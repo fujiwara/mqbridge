@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.0.4](https://github.com/fujiwara/mqbridge/compare/v0.0.3...v0.0.4) - 2026-03-03
+- Add per-bridge url/api_url config with global defaults by @fujiwara in https://github.com/fujiwara/mqbridge/pull/21
+- Bump github.com/sacloud/saclient-go from 0.2.6 to 0.3.1 by @dependabot[bot] in https://github.com/fujiwara/mqbridge/pull/20
+- Refactor integration tests with testEnv helper by @fujiwara in https://github.com/fujiwara/mqbridge/pull/23
+- Update simplemq-cli to v0.3.0 by @fujiwara in https://github.com/fujiwara/mqbridge/pull/24
+
 ## [v0.0.3](https://github.com/fujiwara/mqbridge/compare/v0.0.2...v0.0.3) - 2026-02-28
 - Add architecture overview diagram and document exported struct by @fujiwara in https://github.com/fujiwara/mqbridge/pull/11
 - Add bridge attribute to OpenTelemetry metrics by @fujiwara in https://github.com/fujiwara/mqbridge/pull/13
