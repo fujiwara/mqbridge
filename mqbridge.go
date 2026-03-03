@@ -167,18 +167,18 @@ func buildBridges(cfg *Config) ([]*Bridge, error) {
 	return bridges, nil
 }
 
-func buildBridge(cfg *Config, bc BridgeConfig, m *Metrics, bridgeLabel string, logger *slog.Logger) (*Bridge, error) {
+func buildBridge(_ *Config, bc BridgeConfig, m *Metrics, bridgeLabel string, logger *slog.Logger) (*Bridge, error) {
 	var sub Subscriber
 	var pubs []Publisher
 
 	var srcType, srcQueue string
 	if bc.From.RabbitMQ != nil {
-		sub = NewRabbitMQSubscriber(cfg.RabbitMQ.URL, *bc.From.RabbitMQ, logger)
+		sub = NewRabbitMQSubscriber(*bc.From.RabbitMQ, logger)
 		srcType = "rabbitmq"
 		srcQueue = bc.From.RabbitMQ.Queue
 	} else if bc.From.SimpleMQ != nil {
 		var err error
-		sub, err = NewSimpleMQSubscriber(cfg.SimpleMQ.APIURL, *bc.From.SimpleMQ, logger)
+		sub, err = NewSimpleMQSubscriber(*bc.From.SimpleMQ, logger)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create SimpleMQ subscriber: %w", err)
 		}
@@ -194,9 +194,9 @@ func buildBridge(cfg *Config, bc BridgeConfig, m *Metrics, bridgeLabel string, l
 
 	for j, to := range bc.To {
 		if to.RabbitMQ != nil {
-			pubs = append(pubs, NewRabbitMQPublisher(cfg.RabbitMQ.URL, logger))
+			pubs = append(pubs, NewRabbitMQPublisher(*to.RabbitMQ, logger))
 		} else if to.SimpleMQ != nil {
-			pub, err := NewSimpleMQPublisher(cfg.SimpleMQ.APIURL, *to.SimpleMQ)
+			pub, err := NewSimpleMQPublisher(*to.SimpleMQ)
 			if err != nil {
 				return nil, fmt.Errorf("to[%d]: failed to create SimpleMQ publisher: %w", j, err)
 			}

@@ -11,7 +11,6 @@ import (
 
 // RabbitMQSubscriber consumes messages from a RabbitMQ queue.
 type RabbitMQSubscriber struct {
-	url    string
 	config FromRabbitMQConfig
 	conn   *amqp.Connection
 	ch     *amqp.Channel
@@ -19,9 +18,8 @@ type RabbitMQSubscriber struct {
 }
 
 // NewRabbitMQSubscriber creates a new RabbitMQSubscriber.
-func NewRabbitMQSubscriber(url string, config FromRabbitMQConfig, logger *slog.Logger) *RabbitMQSubscriber {
+func NewRabbitMQSubscriber(config FromRabbitMQConfig, logger *slog.Logger) *RabbitMQSubscriber {
 	return &RabbitMQSubscriber{
-		url:    url,
 		config: config,
 		logger: logger,
 	}
@@ -192,7 +190,7 @@ func (s *RabbitMQSubscriber) Close() error {
 }
 
 func (s *RabbitMQSubscriber) connect() error {
-	conn, err := amqp.Dial(s.url)
+	conn, err := amqp.Dial(s.config.URL)
 	if err != nil {
 		return fmt.Errorf("failed to connect to RabbitMQ: %w", err)
 	}
@@ -209,15 +207,15 @@ func (s *RabbitMQSubscriber) connect() error {
 // RabbitMQPublisher publishes messages to RabbitMQ.
 // The destination exchange and routing key are determined by the message JSON.
 type RabbitMQPublisher struct {
-	url    string
+	config ToRabbitMQConfig
 	conn   *amqp.Connection
 	ch     *amqp.Channel
 	logger *slog.Logger
 }
 
 // NewRabbitMQPublisher creates a new RabbitMQPublisher.
-func NewRabbitMQPublisher(url string, logger *slog.Logger) *RabbitMQPublisher {
-	return &RabbitMQPublisher{url: url, logger: logger}
+func NewRabbitMQPublisher(config ToRabbitMQConfig, logger *slog.Logger) *RabbitMQPublisher {
+	return &RabbitMQPublisher{config: config, logger: logger}
 }
 
 // Publish parses the message JSON and publishes to the specified exchange/routing key.
@@ -279,7 +277,7 @@ func (p *RabbitMQPublisher) ensureConnected() error {
 	if p.conn != nil && !p.conn.IsClosed() {
 		return nil
 	}
-	conn, err := amqp.Dial(p.url)
+	conn, err := amqp.Dial(p.config.URL)
 	if err != nil {
 		return fmt.Errorf("failed to connect to RabbitMQ: %w", err)
 	}
