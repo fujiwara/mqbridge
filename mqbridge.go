@@ -103,7 +103,11 @@ type App struct {
 }
 
 // New creates a new App from a config.
+// It validates the config (which also applies global defaults to per-bridge settings).
 func New(cfg *Config) (*App, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
 	bridges, err := buildBridges(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build bridges: %w", err)
@@ -145,7 +149,6 @@ func (a *App) Run(ctx context.Context) error {
 }
 
 func buildBridges(cfg *Config) ([]*Bridge, error) {
-	cfg.applyDefaults()
 	m, err := newMetrics()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create metrics: %w", err)
