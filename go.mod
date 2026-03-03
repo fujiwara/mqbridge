@@ -10,7 +10,7 @@ require (
 	github.com/fujiwara/sloghandler v0.1.0
 	github.com/google/go-jsonnet v0.21.0
 	github.com/rabbitmq/amqp091-go v1.10.0
-	github.com/sacloud/saclient-go v0.2.6
+	github.com/sacloud/saclient-go v0.3.1
 	github.com/sacloud/secretmanager-api-go v0.3.1
 	github.com/sacloud/simplemq-api-go v0.4.0
 	go.opentelemetry.io/otel v1.40.0
@@ -46,7 +46,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/miekg/dns v1.1.72 // indirect
 	github.com/ogen-go/ogen v1.18.0 // indirect
-	github.com/sacloud/api-client-go v0.3.4 // indirect
+	github.com/sacloud/api-client-go v0.3.5 // indirect
 	github.com/sacloud/go-http v0.1.9 // indirect
 	github.com/sacloud/packages-go v0.0.12 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
