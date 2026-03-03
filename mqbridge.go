@@ -145,6 +145,7 @@ func (a *App) Run(ctx context.Context) error {
 }
 
 func buildBridges(cfg *Config) ([]*Bridge, error) {
+	cfg.applyDefaults()
 	m, err := newMetrics()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create metrics: %w", err)
