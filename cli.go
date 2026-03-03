@@ -49,9 +49,6 @@ func (c *RunCmd) Run(ctx context.Context, globals *CLI) error {
 	if err != nil {
 		return err
 	}
-	if err := cfg.Validate(); err != nil {
-		return err
-	}
 	a, err := New(cfg)
 	if err != nil {
 		return err

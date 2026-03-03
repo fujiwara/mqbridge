@@ -36,8 +36,8 @@ type SimpleMQSubscriber struct {
 }
 
 // NewSimpleMQSubscriber creates a new SimpleMQSubscriber.
-func NewSimpleMQSubscriber(apiURL string, config FromSimpleMQConfig, logger *slog.Logger) (*SimpleMQSubscriber, error) {
-	client, err := newSimpleMQClient(apiURL, config.APIKey)
+func NewSimpleMQSubscriber(config FromSimpleMQConfig, logger *slog.Logger) (*SimpleMQSubscriber, error) {
+	client, err := newSimpleMQClient(config.APIURL, config.APIKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SimpleMQ client: %w", err)
 	}
@@ -129,8 +129,8 @@ type SimpleMQPublisher struct {
 }
 
 // NewSimpleMQPublisher creates a new SimpleMQPublisher.
-func NewSimpleMQPublisher(apiURL string, config ToSimpleMQConfig) (*SimpleMQPublisher, error) {
-	client, err := newSimpleMQClient(apiURL, config.APIKey)
+func NewSimpleMQPublisher(config ToSimpleMQConfig) (*SimpleMQPublisher, error) {
+	client, err := newSimpleMQClient(config.APIURL, config.APIKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SimpleMQ client: %w", err)
 	}

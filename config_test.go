@@ -219,6 +219,122 @@ func TestConfigValidation(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "per-bridge rabbitmq url override",
+			config: mqbridge.Config{
+				RabbitMQ: mqbridge.RabbitMQConfig{URL: "amqp://global"},
+				Bridges: []mqbridge.BridgeConfig{
+					{
+						From: mqbridge.FromConfig{
+							SimpleMQ: &mqbridge.FromSimpleMQConfig{
+								Queue:  "q",
+								APIKey: "key",
+							},
+						},
+						To: []mqbridge.ToConfig{
+							{RabbitMQ: &mqbridge.ToRabbitMQConfig{
+								RabbitMQConfig: mqbridge.RabbitMQConfig{URL: "amqp://override"},
+							}},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "per-bridge rabbitmq url without global",
+			config: mqbridge.Config{
+				Bridges: []mqbridge.BridgeConfig{
+					{
+						From: mqbridge.FromConfig{
+							RabbitMQ: &mqbridge.FromRabbitMQConfig{
+								RabbitMQConfig: mqbridge.RabbitMQConfig{URL: "amqp://per-bridge"},
+								Queue:          "q",
+								Exchange:       "ex",
+							},
+						},
+						To: []mqbridge.ToConfig{
+							{SimpleMQ: &mqbridge.ToSimpleMQConfig{Queue: "dest", APIKey: "key"}},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing rabbitmq url everywhere",
+			config: mqbridge.Config{
+				Bridges: []mqbridge.BridgeConfig{
+					{
+						From: mqbridge.FromConfig{
+							RabbitMQ: &mqbridge.FromRabbitMQConfig{
+								Queue:    "q",
+								Exchange: "ex",
+							},
+						},
+						To: []mqbridge.ToConfig{
+							{SimpleMQ: &mqbridge.ToSimpleMQConfig{Queue: "dest", APIKey: "key"}},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "per-bridge simplemq api_url override",
+			config: mqbridge.Config{
+				SimpleMQ: mqbridge.SimpleMQConfig{APIURL: "http://global"},
+				Bridges: []mqbridge.BridgeConfig{
+					{
+						From: mqbridge.FromConfig{
+							SimpleMQ: &mqbridge.FromSimpleMQConfig{
+								SimpleMQConfig: mqbridge.SimpleMQConfig{APIURL: "http://override"},
+								Queue:          "q",
+								APIKey:         "key",
+							},
+						},
+						To: []mqbridge.ToConfig{
+							{SimpleMQ: &mqbridge.ToSimpleMQConfig{Queue: "dest", APIKey: "key"}},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "mixed: some bridges override, some inherit",
+			config: mqbridge.Config{
+				RabbitMQ: mqbridge.RabbitMQConfig{URL: "amqp://global"},
+				Bridges: []mqbridge.BridgeConfig{
+					{
+						// inherits global URL
+						From: mqbridge.FromConfig{
+							RabbitMQ: &mqbridge.FromRabbitMQConfig{
+								Queue:    "q1",
+								Exchange: "ex1",
+							},
+						},
+						To: []mqbridge.ToConfig{
+							{SimpleMQ: &mqbridge.ToSimpleMQConfig{Queue: "dest1", APIKey: "key"}},
+						},
+					},
+					{
+						// overrides global URL
+						From: mqbridge.FromConfig{
+							RabbitMQ: &mqbridge.FromRabbitMQConfig{
+								RabbitMQConfig: mqbridge.RabbitMQConfig{URL: "amqp://other"},
+								Queue:          "q2",
+								Exchange:       "ex2",
+							},
+						},
+						To: []mqbridge.ToConfig{
+							{SimpleMQ: &mqbridge.ToSimpleMQConfig{Queue: "dest2", APIKey: "key"}},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

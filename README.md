@@ -151,9 +151,49 @@ local must_env = std.native('must_env');
 }
 ```
 
+### Per-bridge URL Override
+
+By default, all bridges share the global `rabbitmq.url` and `simplemq.api_url` settings. You can override these per bridge by specifying `url` or `api_url` directly in each bridge's `from` / `to` block. If a per-bridge URL is set, it takes precedence over the global setting.
+
+```jsonnet
+{
+  rabbitmq: {
+    url: 'amqp://default-host:5672/',  // global default
+  },
+  bridges: [
+    {
+      name: 'bridge-to-other-host',
+      from: {
+        rabbitmq: {
+          url: 'amqp://other-host:5672/',  // overrides global
+          queue: 'source-queue',
+          exchange: 'source-exchange',
+        },
+      },
+      to: [
+        { simplemq: { queue: 'dest-queue', api_key: 'key' } },
+      ],
+    },
+    {
+      name: 'bridge-using-global',
+      from: {
+        rabbitmq: {
+          // no url: inherits amqp://default-host:5672/ from global
+          queue: 'another-queue',
+          exchange: 'another-exchange',
+        },
+      },
+      to: [
+        { simplemq: { queue: 'dest-queue-2', api_key: 'key2' } },
+      ],
+    },
+  ],
+}
+```
+
 ### Configuration Notes
 
-- `rabbitmq.url` is required when any bridge uses RabbitMQ (as source or destination).
+- `rabbitmq.url` is required for each bridge that uses RabbitMQ (either from global setting or per-bridge override).
 - RabbitMQ source requires SimpleMQ destinations. SimpleMQ source supports both RabbitMQ and SimpleMQ destinations. RabbitMQ → RabbitMQ bridging is not supported; use RabbitMQ's built-in features such as [exchange bindings](https://www.rabbitmq.com/docs/e2e) or the [shovel plugin](https://www.rabbitmq.com/docs/shovel) instead.
 - `exchange_type` defaults to `direct` if omitted.
 - `exchange_passive` (default: `false`): When `true`, the subscriber uses `ExchangeDeclarePassive` instead of `ExchangeDeclare`. This verifies the exchange exists without attempting to create it or modify its properties. Useful when the exchange is managed externally and its properties (type, durable, etc.) may differ from what mqbridge would declare, avoiding `PRECONDITION_FAILED` errors.

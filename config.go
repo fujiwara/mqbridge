@@ -48,6 +48,7 @@ type ToConfig struct {
 
 // FromRabbitMQConfig defines a RabbitMQ source.
 type FromRabbitMQConfig struct {
+	RabbitMQConfig         // embedded: url (overrides global)
 	Queue           string `json:"queue"`
 	Exchange        string `json:"exchange"`
 	ExchangeType    string `json:"exchange_type"`
@@ -57,6 +58,7 @@ type FromRabbitMQConfig struct {
 
 // FromSimpleMQConfig defines a SimpleMQ source.
 type FromSimpleMQConfig struct {
+	SimpleMQConfig         // embedded: api_url (overrides global)
 	Queue           string `json:"queue"`
 	APIKey          string `json:"api_key"`
 	PollingInterval string `json:"polling_interval"`
@@ -76,12 +78,15 @@ func (c *FromSimpleMQConfig) GetPollingInterval() time.Duration {
 
 // ToRabbitMQConfig defines a RabbitMQ destination.
 // The actual exchange/routing_key/headers are determined by the message JSON.
-type ToRabbitMQConfig struct{}
+type ToRabbitMQConfig struct {
+	RabbitMQConfig // embedded: url (overrides global)
+}
 
 // ToSimpleMQConfig defines a SimpleMQ destination.
 type ToSimpleMQConfig struct {
-	Queue  string `json:"queue"`
-	APIKey string `json:"api_key"`
+	SimpleMQConfig        // embedded: api_url (overrides global)
+	Queue          string `json:"queue"`
+	APIKey         string `json:"api_key"`
 }
 
 // LoadConfig loads and parses a configuration file (Jsonnet or JSON).
@@ -119,32 +124,40 @@ func parseConfig(data []byte) (*Config, error) {
 	return &cfg, nil
 }
 
+// applyDefaults copies global config into per-bridge configs where not already set.
+func (c *Config) applyDefaults() {
+	for i := range c.Bridges {
+		b := &c.Bridges[i]
+		if b.From.RabbitMQ != nil && b.From.RabbitMQ.URL == "" {
+			b.From.RabbitMQ.RabbitMQConfig = c.RabbitMQ
+		}
+		if b.From.SimpleMQ != nil && b.From.SimpleMQ.APIURL == "" {
+			b.From.SimpleMQ.SimpleMQConfig = c.SimpleMQ
+		}
+		for j := range b.To {
+			to := &b.To[j]
+			if to.RabbitMQ != nil && to.RabbitMQ.URL == "" {
+				to.RabbitMQ.RabbitMQConfig = c.RabbitMQ
+			}
+			if to.SimpleMQ != nil && to.SimpleMQ.APIURL == "" {
+				to.SimpleMQ.SimpleMQConfig = c.SimpleMQ
+			}
+		}
+	}
+}
+
 // Validate checks the configuration for correctness.
 func (c *Config) Validate() error {
 	if len(c.Bridges) == 0 {
 		return fmt.Errorf("at least one bridge is required")
 	}
+	c.applyDefaults()
 	for i, b := range c.Bridges {
 		if err := b.validate(); err != nil {
 			return fmt.Errorf("bridges[%d]: %w", i, err)
 		}
-		if b.usesRabbitMQ() && c.RabbitMQ.URL == "" {
-			return fmt.Errorf("rabbitmq.url is required when any bridge uses RabbitMQ")
-		}
 	}
 	return nil
-}
-
-func (b *BridgeConfig) usesRabbitMQ() bool {
-	if b.From.RabbitMQ != nil {
-		return true
-	}
-	for _, to := range b.To {
-		if to.RabbitMQ != nil {
-			return true
-		}
-	}
-	return false
 }
 
 func (b *BridgeConfig) validate() error {
@@ -170,6 +183,9 @@ func (f *FromConfig) validate() error {
 		return fmt.Errorf("from must specify only one of rabbitmq or simplemq")
 	}
 	if f.RabbitMQ != nil {
+		if f.RabbitMQ.URL == "" {
+			return fmt.Errorf("from.rabbitmq.url is required")
+		}
 		if f.RabbitMQ.Queue == "" {
 			return fmt.Errorf("from.rabbitmq.queue is required")
 		}
@@ -197,6 +213,11 @@ func (t *ToConfig) validate(index int, from FromConfig) error {
 	if from.SimpleMQ != nil {
 		if t.RabbitMQ == nil && t.SimpleMQ == nil {
 			return fmt.Errorf("to[%d]: destination must specify rabbitmq or simplemq", index)
+		}
+	}
+	if t.RabbitMQ != nil {
+		if t.RabbitMQ.URL == "" {
+			return fmt.Errorf("to[%d]: rabbitmq.url is required", index)
 		}
 	}
 	if t.SimpleMQ != nil {
