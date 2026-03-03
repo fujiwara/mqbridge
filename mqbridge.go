@@ -158,7 +158,7 @@ func buildBridges(cfg *Config) ([]*Bridge, error) {
 			bridgeLabel = fmt.Sprintf("%d", i)
 		}
 		logger := slog.Default().With("bridge", bridgeLabel)
-		bridge, err := buildBridge(cfg, bc, m, bridgeLabel, logger)
+		bridge, err := buildBridge(bc, m, bridgeLabel, logger)
 		if err != nil {
 			return nil, fmt.Errorf("bridges[%d]: %w", i, err)
 		}
@@ -167,7 +167,7 @@ func buildBridges(cfg *Config) ([]*Bridge, error) {
 	return bridges, nil
 }
 
-func buildBridge(_ *Config, bc BridgeConfig, m *Metrics, bridgeLabel string, logger *slog.Logger) (*Bridge, error) {
+func buildBridge(bc BridgeConfig, m *Metrics, bridgeLabel string, logger *slog.Logger) (*Bridge, error) {
 	var sub Subscriber
 	var pubs []Publisher
 
