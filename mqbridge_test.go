@@ -63,7 +63,7 @@ type testEnv struct {
 
 func newTestEnv(t *testing.T, needsRabbitMQ bool) *testEnv {
 	t.Helper()
-	smqServer := localserver.NewServer()
+	smqServer := localserver.NewServer(testAPIKey)
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(func() {
 		cancel()
