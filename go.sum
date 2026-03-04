@@ -20,8 +20,8 @@ github.com/fujiwara/jsonnet-armed v0.1.1 h1:Lq65mAKzhdVWFLjQowYb4t4RS/1AMA5sXiGW
 github.com/fujiwara/jsonnet-armed v0.1.1/go.mod h1:MyGurW7aiBjqaRuXb1GsHGr43CbRkMJ8rg0zyYLd2CU=
 github.com/fujiwara/sakura-secrets-cli v0.2.0 h1:PUuD/2b/sjfo+noRzzFQ/t8JYpq1iKLu5ZrNd7NZ/FU=
 github.com/fujiwara/sakura-secrets-cli v0.2.0/go.mod h1:1JhLMDqhoIO4Lmp2lPL1Q4Tp+U36wU2jcdhcHLSzfdI=
-github.com/fujiwara/simplemq-cli v0.3.0 h1:NWrnXLuExfIAvkotIsbfmzkYlioTxn2jFkQyjeSHMeU=
-github.com/fujiwara/simplemq-cli v0.3.0/go.mod h1:H9tezZa66A524S0YD+CFuB2L9P1X2v70bQIvo9SmtCE=
+github.com/fujiwara/simplemq-cli v0.4.0 h1:KZavIeTYofItOLm96BEo/81pyk5heH91Lt+jf4yVhWA=
+github.com/fujiwara/simplemq-cli v0.4.0/go.mod h1:H9tezZa66A524S0YD+CFuB2L9P1X2v70bQIvo9SmtCE=
 github.com/fujiwara/sloghandler v0.1.0 h1:4uxE5z01fKv/qzUoIyYk/2H1D4xEb/wi2K/Wks9z5Tg=
 github.com/fujiwara/sloghandler v0.1.0/go.mod h1:9wl7zZ1fO53Gl83/M8KFYW+5iACiwXAltOL5REOUd24=
 github.com/ghodss/yaml v1.0.0 h1:wQHKEahhL6wmXdzwWG11gIVCkOv05bNOh+Rxn0yngAk=
