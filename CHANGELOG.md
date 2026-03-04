@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.0.5](https://github.com/fujiwara/mqbridge/compare/v0.0.4...v0.0.5) - 2026-03-04
+- Update simplemq-cli to v0.4.0 by @fujiwara in https://github.com/fujiwara/mqbridge/pull/25
+
 ## [v0.0.4](https://github.com/fujiwara/mqbridge/compare/v0.0.3...v0.0.4) - 2026-03-03
 - Add per-bridge url/api_url config with global defaults by @fujiwara in https://github.com/fujiwara/mqbridge/pull/21
 - Bump github.com/sacloud/saclient-go from 0.2.6 to 0.3.1 by @dependabot[bot] in https://github.com/fujiwara/mqbridge/pull/20
