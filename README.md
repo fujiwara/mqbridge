@@ -285,12 +285,12 @@ This means RPC-related fields (`reply_to`, `correlation_id`) are preserved when 
 
 When publishing to RabbitMQ, the publisher reads the destination from `Message.Headers`:
 
-- `rabbitmq.exchange` (required) — target exchange
-- `rabbitmq.routing_key` (required) — routing key
+- `rabbitmq.exchange` (required key) — target exchange; may be the empty string (`""`) to use the AMQP default exchange
+- `rabbitmq.routing_key` (required key) — routing key; may be empty (e.g. for fanout exchanges)
 - `rabbitmq.reply_to`, `rabbitmq.correlation_id`, `rabbitmq.content_type`, `rabbitmq.message_id` — mapped to the corresponding AMQP fields
 - `rabbitmq.header.<key>` — published as custom AMQP headers (prefix stripped)
 
-External producers sending messages to a SimpleMQ queue for RabbitMQ delivery must use the wire format above with the required `rabbitmq.exchange` and `rabbitmq.routing_key` headers.
+External producers sending messages to a SimpleMQ queue for RabbitMQ delivery must use the wire format above. The `rabbitmq.exchange` and `rabbitmq.routing_key` header keys must be present; to target the default exchange, set `"rabbitmq.exchange": ""` in the headers.
 
 #### SimpleMQ → SimpleMQ
 

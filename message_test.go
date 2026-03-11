@@ -40,6 +40,20 @@ func TestMarshalUnmarshalMessage(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "empty body with headers",
+			msg: &mqbridge.Message{
+				Body: []byte{},
+				Headers: map[string]string{
+					"rabbitmq.exchange":    "ex",
+					"rabbitmq.routing_key": "rk",
+				},
+			},
+		},
+		{
+			name: "empty body no headers",
+			msg:  &mqbridge.Message{Body: []byte{}},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -95,7 +109,29 @@ func TestRabbitMQPublishParams(t *testing.T) {
 			wantHdrLen: 1,
 		},
 		{
-			name: "missing exchange",
+			name: "empty exchange (default exchange)",
+			msg: &mqbridge.Message{
+				Headers: map[string]string{
+					"rabbitmq.exchange":    "",
+					"rabbitmq.routing_key": "reply-queue",
+				},
+			},
+			wantExch: "",
+			wantRK:   "reply-queue",
+		},
+		{
+			name: "empty routing_key (fanout)",
+			msg: &mqbridge.Message{
+				Headers: map[string]string{
+					"rabbitmq.exchange":    "fanout-ex",
+					"rabbitmq.routing_key": "",
+				},
+			},
+			wantExch: "fanout-ex",
+			wantRK:   "",
+		},
+		{
+			name: "missing exchange key",
 			msg: &mqbridge.Message{
 				Headers: map[string]string{
 					"rabbitmq.routing_key": "key",
@@ -104,7 +140,7 @@ func TestRabbitMQPublishParams(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "missing routing_key",
+			name: "missing routing_key key",
 			msg: &mqbridge.Message{
 				Headers: map[string]string{
 					"rabbitmq.exchange": "ex",
