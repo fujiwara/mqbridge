@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.1.0](https://github.com/fujiwara/mqbridge/compare/v0.0.4...v0.1.0) - 2026-03-11
+- Update simplemq-cli to v0.4.0 by @fujiwara in https://github.com/fujiwara/mqbridge/pull/25
+- Introduce structured Message type to preserve metadata across bridges by @fujiwara in https://github.com/fujiwara/mqbridge/pull/27
+- Update simplemq-api-go to v0.5.0 by @fujiwara in https://github.com/fujiwara/mqbridge/pull/28
+
 ## [v0.0.4](https://github.com/fujiwara/mqbridge/compare/v0.0.3...v0.0.4) - 2026-03-03
 - Add per-bridge url/api_url config with global defaults by @fujiwara in https://github.com/fujiwara/mqbridge/pull/21
 - Bump github.com/sacloud/saclient-go from 0.2.6 to 0.3.1 by @dependabot[bot] in https://github.com/fujiwara/mqbridge/pull/20
