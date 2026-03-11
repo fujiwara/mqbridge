@@ -296,7 +296,26 @@ External producers sending messages to a SimpleMQ queue for RabbitMQ delivery mu
 
 Messages are forwarded as-is (re-serialized in the same wire format). No RabbitMQ-specific headers are added unless the original message already contained them.
 
-You can use [`mqbridge.MarshalMessage()`](https://pkg.go.dev/github.com/fujiwara/mqbridge#MarshalMessage) and [`mqbridge.UnmarshalMessage()`](https://pkg.go.dev/github.com/fujiwara/mqbridge#UnmarshalMessage) to construct or parse messages programmatically.
+#### Programmatic Message Construction
+
+You can use [`mqbridge.MarshalMessage()`](https://pkg.go.dev/github.com/fujiwara/mqbridge#MarshalMessage) and [`mqbridge.UnmarshalMessage()`](https://pkg.go.dev/github.com/fujiwara/mqbridge#UnmarshalMessage) to construct or parse messages programmatically. For messages destined for RabbitMQ, use [`msg.ValidateForRabbitMQ()`](https://pkg.go.dev/github.com/fujiwara/mqbridge#Message.ValidateForRabbitMQ) to verify that the required headers are present before sending.
+
+```go
+msg := &mqbridge.Message{
+    Body: []byte("hello"),
+    Headers: map[string]string{
+        mqbridge.HeaderRabbitMQExchange:   "my-exchange",
+        mqbridge.HeaderRabbitMQRoutingKey: "my.key",
+    },
+}
+if err := msg.ValidateForRabbitMQ(); err != nil {
+    log.Fatal(err) // rabbitmq.exchange or rabbitmq.routing_key is missing
+}
+data, _ := mqbridge.MarshalMessage(msg)
+// send data to SimpleMQ queue (base64-encoded)
+```
+
+Messages that fail validation at the bridge are logged and dropped (not retried), and counted in the `mqbridge.messages.dropped` metric.
 
 ## Metrics
 
