@@ -86,6 +86,70 @@ func TestUnmarshalMessageLegacy(t *testing.T) {
 	}
 }
 
+func TestValidateForRabbitMQ(t *testing.T) {
+	tests := []struct {
+		name    string
+		msg     *mqbridge.Message
+		wantErr bool
+	}{
+		{
+			name: "valid",
+			msg: &mqbridge.Message{
+				Headers: map[string]string{
+					mqbridge.HeaderRabbitMQExchange:   "ex",
+					mqbridge.HeaderRabbitMQRoutingKey: "key",
+				},
+			},
+		},
+		{
+			name: "empty exchange is valid",
+			msg: &mqbridge.Message{
+				Headers: map[string]string{
+					mqbridge.HeaderRabbitMQExchange:   "",
+					mqbridge.HeaderRabbitMQRoutingKey: "key",
+				},
+			},
+		},
+		{
+			name: "missing exchange key",
+			msg: &mqbridge.Message{
+				Headers: map[string]string{
+					mqbridge.HeaderRabbitMQRoutingKey: "key",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing routing_key key",
+			msg: &mqbridge.Message{
+				Headers: map[string]string{
+					mqbridge.HeaderRabbitMQExchange: "ex",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name:    "no headers at all",
+			msg:     &mqbridge.Message{Body: []byte("hello")},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.msg.ValidateForRabbitMQ()
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
 func TestRabbitMQPublishParams(t *testing.T) {
 	tests := []struct {
 		name       string

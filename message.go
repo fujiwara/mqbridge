@@ -95,20 +95,29 @@ func UnmarshalMessage(data []byte) *Message {
 	}
 }
 
+// ValidateForRabbitMQ checks that the message has the required headers
+// for publishing to RabbitMQ (rabbitmq.exchange and rabbitmq.routing_key).
+// Both keys must be present but may be empty strings.
+func (m *Message) ValidateForRabbitMQ() error {
+	if _, ok := m.Headers[HeaderRabbitMQExchange]; !ok {
+		return fmt.Errorf("header %q is required", HeaderRabbitMQExchange)
+	}
+	if _, ok := m.Headers[HeaderRabbitMQRoutingKey]; !ok {
+		return fmt.Errorf("header %q is required", HeaderRabbitMQRoutingKey)
+	}
+	return nil
+}
+
 // RabbitMQPublishParams extracts RabbitMQ publishing parameters from a Message.
 // Returns exchange, routingKey, and custom AMQP headers.
 // Exchange may be empty (AMQP default exchange). RoutingKey may also be empty
 // (e.g. for fanout exchanges). Both header keys must be present.
 func (m *Message) RabbitMQPublishParams() (exchange, routingKey string, headers map[string]string, err error) {
-	var ok bool
-	exchange, ok = m.Headers[HeaderRabbitMQExchange]
-	if !ok {
-		return "", "", nil, fmt.Errorf("header %q is required", HeaderRabbitMQExchange)
+	if err := m.ValidateForRabbitMQ(); err != nil {
+		return "", "", nil, err
 	}
-	routingKey, ok = m.Headers[HeaderRabbitMQRoutingKey]
-	if !ok {
-		return "", "", nil, fmt.Errorf("header %q is required", HeaderRabbitMQRoutingKey)
-	}
+	exchange = m.Headers[HeaderRabbitMQExchange]
+	routingKey = m.Headers[HeaderRabbitMQRoutingKey]
 	headers = make(map[string]string)
 	for k, v := range m.Headers {
 		if len(k) > len(HeaderRabbitMQHeaderPrefix) && k[:len(HeaderRabbitMQHeaderPrefix)] == HeaderRabbitMQHeaderPrefix {
