@@ -45,7 +45,7 @@ func (p *mockPublisher) Publish(_ context.Context, msg *mqbridge.Message) (*mqbr
 func (p *mockPublisher) Type() string { return p.typeName }
 func (p *mockPublisher) Close() error { return nil }
 
-// failingPublisher always returns an error.
+// failingPublisher always returns an error (infrastructure error, retriable).
 type failingPublisher struct {
 	typeName string
 }
@@ -56,6 +56,18 @@ func (p *failingPublisher) Publish(_ context.Context, _ *mqbridge.Message) (*mqb
 
 func (p *failingPublisher) Type() string { return p.typeName }
 func (p *failingPublisher) Close() error { return nil }
+
+// messageErrorPublisher returns a MessageError (message content error, should be dropped).
+type messageErrorPublisher struct {
+	typeName string
+}
+
+func (p *messageErrorPublisher) Publish(_ context.Context, _ *mqbridge.Message) (*mqbridge.PublishResult, error) {
+	return nil, &mqbridge.MessageError{Err: fmt.Errorf("missing required header")}
+}
+
+func (p *messageErrorPublisher) Type() string { return p.typeName }
+func (p *messageErrorPublisher) Close() error { return nil }
 
 func setupTestMeterProvider(t *testing.T) *sdkmetric.ManualReader {
 	t.Helper()
@@ -280,6 +292,56 @@ func TestMetricsPublishError(t *testing.T) {
 	errors := findMetric(rm, "mqbridge.messages.errors")
 	if got := sumInt64(errors); got != 1 {
 		t.Errorf("messages.errors: got %d, want 1", got)
+	}
+
+	published := findMetric(rm, "mqbridge.messages.published")
+	if got := sumInt64(published); got != 0 {
+		t.Errorf("messages.published: got %d, want 0", got)
+	}
+}
+
+func TestMetricsMessageDropped(t *testing.T) {
+	reader := setupTestMeterProvider(t)
+
+	bridge := mqbridge.NewBridgeForTest(
+		&mockSubscriber{messages: []*mqbridge.Message{
+			{Body: []byte("good")},
+			{Body: []byte("bad")},
+			{Body: []byte("good2")},
+		}},
+		[]mqbridge.Publisher{&messageErrorPublisher{typeName: "rabbitmq"}},
+		"simplemq", "src-queue",
+	)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- bridge.Run(ctx)
+	}()
+
+	// All messages are "dropped" (messageErrorPublisher always returns MessageError),
+	// but the bridge should not error out — it should continue processing.
+	cancel()
+	<-errCh
+
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(t.Context(), &rm); err != nil {
+		t.Fatalf("failed to collect metrics: %v", err)
+	}
+
+	received := findMetric(rm, "mqbridge.messages.received")
+	if got := sumInt64(received); got != 3 {
+		t.Errorf("messages.received: got %d, want 3", got)
+	}
+
+	dropped := findMetric(rm, "mqbridge.messages.dropped")
+	if got := sumInt64(dropped); got != 3 {
+		t.Errorf("messages.dropped: got %d, want 3", got)
+	}
+
+	errors := findMetric(rm, "mqbridge.messages.errors")
+	if got := sumInt64(errors); got != 0 {
+		t.Errorf("messages.errors: got %d, want 0", got)
 	}
 
 	published := findMetric(rm, "mqbridge.messages.published")

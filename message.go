@@ -13,6 +13,16 @@ type Message struct {
 	Headers map[string]string
 }
 
+// MessageError represents an error caused by the message content itself
+// (e.g. missing required headers). Messages that cause this error cannot
+// be processed regardless of retries and should be dropped.
+type MessageError struct {
+	Err error
+}
+
+func (e *MessageError) Error() string { return e.Err.Error() }
+func (e *MessageError) Unwrap() error { return e.Err }
+
 // bodyEncodingBase64 is the wire format value for base64-encoded body.
 const bodyEncodingBase64 = "base64"
 

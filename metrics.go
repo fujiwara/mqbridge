@@ -18,6 +18,7 @@ type Metrics struct {
 	messagesReceived   metric.Int64Counter
 	messagesPublished  metric.Int64Counter
 	messageErrors      metric.Int64Counter
+	messagesDropped    metric.Int64Counter
 	processingDuration metric.Float64Histogram
 }
 
@@ -45,6 +46,13 @@ func newMetrics() (*Metrics, error) {
 		return nil, fmt.Errorf("failed to create messages.errors counter: %w", err)
 	}
 
+	dropped, err := meter.Int64Counter("mqbridge.messages.dropped",
+		metric.WithDescription("Messages dropped due to unrecoverable content errors"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create messages.dropped counter: %w", err)
+	}
+
 	duration, err := meter.Float64Histogram("mqbridge.message.processing.duration",
 		metric.WithDescription("Time from receive to all publishes done (seconds)"),
 		metric.WithUnit("s"),
@@ -57,6 +65,7 @@ func newMetrics() (*Metrics, error) {
 		messagesReceived:   received,
 		messagesPublished:  published,
 		messageErrors:      errors,
+		messagesDropped:    dropped,
 		processingDuration: duration,
 	}, nil
 }

@@ -227,7 +227,7 @@ func (p *RabbitMQPublisher) Publish(ctx context.Context, msg *Message) (*Publish
 	}
 	exchange, routingKey, customHeaders, err := msg.RabbitMQPublishParams()
 	if err != nil {
-		return nil, fmt.Errorf("failed to extract RabbitMQ params: %w", err)
+		return nil, &MessageError{Err: fmt.Errorf("failed to extract RabbitMQ params: %w", err)}
 	}
 	headers := make(amqp.Table)
 	for k, v := range customHeaders {

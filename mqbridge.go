@@ -2,6 +2,7 @@ package mqbridge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -56,6 +57,16 @@ func (b *Bridge) Run(ctx context.Context) error {
 		for _, pub := range b.To {
 			result, err := pub.Publish(ctx, msg)
 			if err != nil {
+				var msgErr *MessageError
+				if errors.As(err, &msgErr) {
+					// Message content error: drop the message to avoid infinite retries.
+					b.metrics.messagesDropped.Add(ctx, 1, metric.WithAttributeSet(b.srcAttrs))
+					b.logger.Error("dropping malformed message",
+						"destination_type", pub.Type(),
+						"error", err,
+					)
+					return nil
+				}
 				b.metrics.messageErrors.Add(ctx, 1, metric.WithAttributeSet(b.srcAttrs))
 				b.logger.Error("failed to publish message",
 					"destination_type", pub.Type(),

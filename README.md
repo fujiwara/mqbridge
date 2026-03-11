@@ -312,7 +312,8 @@ The following metrics are exported:
 |--------|------|-------------|------------|
 | `mqbridge.messages.received` | Counter | Messages received from subscriber | `bridge`, `source_type`, `source_queue` |
 | `mqbridge.messages.published` | Counter | Messages published to destination | `bridge`, `destination_type`, `destination_queue` |
-| `mqbridge.messages.errors` | Counter | Message processing errors | `bridge`, `source_type`, `source_queue` |
+| `mqbridge.messages.errors` | Counter | Message processing errors (retriable) | `bridge`, `source_type`, `source_queue` |
+| `mqbridge.messages.dropped` | Counter | Messages dropped due to unrecoverable content errors | `bridge`, `source_type`, `source_queue` |
 | `mqbridge.message.processing.duration` | Histogram | Time to publish to all destinations (seconds) | `bridge`, `source_type`, `source_queue` |
 
 `processing.duration` measures only the publish phase (from after the message is received to after all destinations have been published to). It does not include subscriber wait time.
