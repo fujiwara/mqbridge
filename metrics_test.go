@@ -15,10 +15,10 @@ import (
 
 // mockSubscriber calls the handler once per message, then blocks until context is cancelled.
 type mockSubscriber struct {
-	messages [][]byte
+	messages []*mqbridge.Message
 }
 
-func (s *mockSubscriber) Subscribe(ctx context.Context, handler func(ctx context.Context, msg []byte) error) error {
+func (s *mockSubscriber) Subscribe(ctx context.Context, handler func(ctx context.Context, msg *mqbridge.Message) error) error {
 	for _, msg := range s.messages {
 		if err := handler(ctx, msg); err != nil {
 			return err
@@ -32,12 +32,12 @@ func (s *mockSubscriber) Close() error { return nil }
 
 // mockPublisher records published messages.
 type mockPublisher struct {
-	messages    [][]byte
+	messages    []*mqbridge.Message
 	destination string
 	typeName    string
 }
 
-func (p *mockPublisher) Publish(_ context.Context, msg []byte) (*mqbridge.PublishResult, error) {
+func (p *mockPublisher) Publish(_ context.Context, msg *mqbridge.Message) (*mqbridge.PublishResult, error) {
 	p.messages = append(p.messages, msg)
 	return &mqbridge.PublishResult{Destination: p.destination}, nil
 }
@@ -50,7 +50,7 @@ type failingPublisher struct {
 	typeName string
 }
 
-func (p *failingPublisher) Publish(_ context.Context, _ []byte) (*mqbridge.PublishResult, error) {
+func (p *failingPublisher) Publish(_ context.Context, _ *mqbridge.Message) (*mqbridge.PublishResult, error) {
 	return nil, fmt.Errorf("publish failed")
 }
 
@@ -132,7 +132,11 @@ func TestMetricsSingleDestination(t *testing.T) {
 	reader := setupTestMeterProvider(t)
 
 	bridge := mqbridge.NewBridgeForTest(
-		&mockSubscriber{messages: [][]byte{[]byte("msg1"), []byte("msg2"), []byte("msg3")}},
+		&mockSubscriber{messages: []*mqbridge.Message{
+			{Body: []byte("msg1")},
+			{Body: []byte("msg2")},
+			{Body: []byte("msg3")},
+		}},
 		[]mqbridge.Publisher{&mockPublisher{destination: "dest-queue", typeName: "simplemq"}},
 		"rabbitmq", "test-queue",
 	)
@@ -191,7 +195,10 @@ func TestMetricsFanout(t *testing.T) {
 	pub3 := &mockPublisher{destination: "dest-3", typeName: "simplemq"}
 
 	bridge := mqbridge.NewBridgeForTest(
-		&mockSubscriber{messages: [][]byte{[]byte("msg1"), []byte("msg2")}},
+		&mockSubscriber{messages: []*mqbridge.Message{
+			{Body: []byte("msg1")},
+			{Body: []byte("msg2")},
+		}},
 		[]mqbridge.Publisher{pub1, pub2, pub3},
 		"rabbitmq", "src-queue",
 	)
@@ -243,7 +250,7 @@ func TestMetricsPublishError(t *testing.T) {
 	reader := setupTestMeterProvider(t)
 
 	bridge := mqbridge.NewBridgeForTest(
-		&mockSubscriber{messages: [][]byte{[]byte("msg1")}},
+		&mockSubscriber{messages: []*mqbridge.Message{{Body: []byte("msg1")}}},
 		[]mqbridge.Publisher{&failingPublisher{typeName: "rabbitmq"}},
 		"simplemq", "src-queue",
 	)

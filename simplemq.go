@@ -50,7 +50,7 @@ func NewSimpleMQSubscriber(config FromSimpleMQConfig, logger *slog.Logger) (*Sim
 }
 
 // Subscribe polls the SimpleMQ queue and calls the handler for each message.
-func (s *SimpleMQSubscriber) Subscribe(ctx context.Context, handler func(ctx context.Context, msg []byte) error) error {
+func (s *SimpleMQSubscriber) Subscribe(ctx context.Context, handler func(ctx context.Context, msg *Message) error) error {
 	s.logger.Info("SimpleMQ subscriber started", "queue", s.queueName, "interval", s.pollingInterval)
 	ticker := time.NewTicker(s.pollingInterval)
 	defer ticker.Stop()
@@ -68,7 +68,7 @@ func (s *SimpleMQSubscriber) Subscribe(ctx context.Context, handler func(ctx con
 	}
 }
 
-func (s *SimpleMQSubscriber) poll(ctx context.Context, handler func(ctx context.Context, msg []byte) error) error {
+func (s *SimpleMQSubscriber) poll(ctx context.Context, handler func(ctx context.Context, msg *Message) error) error {
 	res, err := s.client.ReceiveMessage(ctx, message.ReceiveMessageParams{
 		QueueName: message.QueueName(s.queueName),
 	})
@@ -82,26 +82,27 @@ func (s *SimpleMQSubscriber) poll(ctx context.Context, handler func(ctx context.
 	// Use a non-cancellable context for message processing and deletion
 	// so in-flight work completes even when the parent context is cancelled.
 	msgCtx := context.WithoutCancel(ctx)
-	for _, msg := range recvOK.Messages {
-		body, err := base64.StdEncoding.DecodeString(string(msg.Content))
+	for _, raw := range recvOK.Messages {
+		decoded, err := base64.StdEncoding.DecodeString(string(raw.Content))
 		if err != nil {
 			s.logger.Error("failed to decode message content, deleting invalid message",
 				"queue", s.queueName,
-				"messageId", msg.ID,
+				"messageId", raw.ID,
 				"error", err,
 			)
 			if _, delErr := s.client.DeleteMessage(msgCtx, message.DeleteMessageParams{
 				QueueName: message.QueueName(s.queueName),
-				MessageId: msg.ID,
+				MessageId: raw.ID,
 			}); delErr != nil {
-				s.logger.Error("failed to delete invalid message", "queue", s.queueName, "messageId", msg.ID, "error", delErr)
+				s.logger.Error("failed to delete invalid message", "queue", s.queueName, "messageId", raw.ID, "error", delErr)
 			}
 			continue
 		}
-		if err := handler(msgCtx, body); err != nil {
+		msg := UnmarshalMessage(decoded)
+		if err := handler(msgCtx, msg); err != nil {
 			s.logger.Error("failed to handle message, skipping delete",
 				"queue", s.queueName,
-				"messageId", msg.ID,
+				"messageId", raw.ID,
 				"error", err,
 			)
 			continue
@@ -109,9 +110,9 @@ func (s *SimpleMQSubscriber) poll(ctx context.Context, handler func(ctx context.
 		// Delete message after successful handling
 		if _, err := s.client.DeleteMessage(msgCtx, message.DeleteMessageParams{
 			QueueName: message.QueueName(s.queueName),
-			MessageId: msg.ID,
+			MessageId: raw.ID,
 		}); err != nil {
-			s.logger.Error("failed to delete message", "queue", s.queueName, "messageId", msg.ID, "error", err)
+			s.logger.Error("failed to delete message", "queue", s.queueName, "messageId", raw.ID, "error", err)
 		}
 	}
 	return nil
@@ -140,10 +141,14 @@ func NewSimpleMQPublisher(config ToSimpleMQConfig) (*SimpleMQPublisher, error) {
 	}, nil
 }
 
-// Publish sends a message to the SimpleMQ queue.
-// The message body is base64-encoded before sending.
-func (p *SimpleMQPublisher) Publish(ctx context.Context, msg []byte) (*PublishResult, error) {
-	encoded := base64.StdEncoding.EncodeToString(msg)
+// Publish sends a Message to the SimpleMQ queue.
+// The Message is serialized to JSON and then base64-encoded before sending.
+func (p *SimpleMQPublisher) Publish(ctx context.Context, msg *Message) (*PublishResult, error) {
+	data, err := MarshalMessage(msg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	}
+	encoded := base64.StdEncoding.EncodeToString(data)
 	res, err := p.client.SendMessage(ctx,
 		&message.SendRequest{Content: message.MessageContent(encoded)},
 		message.SendMessageParams{QueueName: message.QueueName(p.queueName)},

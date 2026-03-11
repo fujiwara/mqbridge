@@ -1,30 +1,103 @@
 package mqbridge
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"unicode/utf8"
 )
 
-// RabbitMQMessage represents the JSON format for messages
-// sent from SimpleMQ to RabbitMQ.
-type RabbitMQMessage struct {
-	Exchange   string            `json:"exchange"`
-	RoutingKey string            `json:"routing_key"`
-	Headers    map[string]string `json:"headers,omitempty"`
-	Body       string            `json:"body"`
+// Message is the common message type passed between Subscriber and Publisher.
+type Message struct {
+	Body    []byte
+	Headers map[string]string
 }
 
-// ParseRabbitMQMessage parses a JSON message from SimpleMQ.
-func ParseRabbitMQMessage(data []byte) (*RabbitMQMessage, error) {
-	var msg RabbitMQMessage
-	if err := json.Unmarshal(data, &msg); err != nil {
-		return nil, fmt.Errorf("failed to parse RabbitMQ message: %w", err)
+// bodyEncodingBase64 is the wire format value for base64-encoded body.
+const bodyEncodingBase64 = "base64"
+
+// Header key constants for RabbitMQ-specific metadata.
+const (
+	HeaderRabbitMQExchange      = "rabbitmq.exchange"
+	HeaderRabbitMQRoutingKey    = "rabbitmq.routing_key"
+	HeaderRabbitMQReplyTo       = "rabbitmq.reply_to"
+	HeaderRabbitMQCorrelationID = "rabbitmq.correlation_id"
+	HeaderRabbitMQContentType   = "rabbitmq.content_type"
+	HeaderRabbitMQMessageID     = "rabbitmq.message_id"
+	// HeaderRabbitMQHeaderPrefix is used for custom AMQP headers.
+	// e.g. an AMQP header "x-foo" becomes "rabbitmq.header.x-foo".
+	HeaderRabbitMQHeaderPrefix = "rabbitmq.header."
+)
+
+// messageWire is the JSON serialization format for Message on SimpleMQ.
+type messageWire struct {
+	Headers      map[string]string `json:"headers,omitempty"`
+	Body         string            `json:"body"`
+	BodyEncoding string            `json:"body_encoding,omitempty"` // "base64" for binary-safe
+}
+
+// MarshalMessage serializes a Message to JSON (for SimpleMQ transport).
+// If the body is valid UTF-8, it is stored as a plain string.
+// Otherwise, it is base64-encoded and body_encoding is set to "base64".
+func MarshalMessage(msg *Message) ([]byte, error) {
+	w := messageWire{
+		Headers: msg.Headers,
 	}
-	if msg.Exchange == "" {
-		return nil, fmt.Errorf("exchange is required in message")
+	if utf8.Valid(msg.Body) {
+		w.Body = string(msg.Body)
+	} else {
+		w.Body = base64.StdEncoding.EncodeToString(msg.Body)
+		w.BodyEncoding = bodyEncodingBase64
 	}
-	if msg.RoutingKey == "" {
-		return nil, fmt.Errorf("routing_key is required in message")
+	return json.Marshal(w)
+}
+
+// UnmarshalMessage deserializes a Message from JSON.
+// If body_encoding is "base64", the body is decoded from base64.
+// If the data is not valid messageWire JSON, it falls back to treating
+// the entire data as the message body with no headers (backward compatibility).
+func UnmarshalMessage(data []byte) *Message {
+	var w messageWire
+	if err := json.Unmarshal(data, &w); err == nil && w.Body != "" {
+		var body []byte
+		if w.BodyEncoding == bodyEncodingBase64 {
+			decoded, err := base64.StdEncoding.DecodeString(w.Body)
+			if err != nil {
+				// Invalid base64; treat as raw string.
+				body = []byte(w.Body)
+			} else {
+				body = decoded
+			}
+		} else {
+			body = []byte(w.Body)
+		}
+		return &Message{
+			Body:    body,
+			Headers: w.Headers,
+		}
 	}
-	return &msg, nil
+	// Fallback: treat entire data as body (legacy format).
+	return &Message{
+		Body: data,
+	}
+}
+
+// RabbitMQPublishParams extracts RabbitMQ publishing parameters from a Message.
+// Returns exchange, routingKey, and custom AMQP headers.
+func (m *Message) RabbitMQPublishParams() (exchange, routingKey string, headers map[string]string, err error) {
+	exchange = m.Headers[HeaderRabbitMQExchange]
+	if exchange == "" {
+		return "", "", nil, fmt.Errorf("header %q is required", HeaderRabbitMQExchange)
+	}
+	routingKey = m.Headers[HeaderRabbitMQRoutingKey]
+	if routingKey == "" {
+		return "", "", nil, fmt.Errorf("header %q is required", HeaderRabbitMQRoutingKey)
+	}
+	headers = make(map[string]string)
+	for k, v := range m.Headers {
+		if len(k) > len(HeaderRabbitMQHeaderPrefix) && k[:len(HeaderRabbitMQHeaderPrefix)] == HeaderRabbitMQHeaderPrefix {
+			headers[k[len(HeaderRabbitMQHeaderPrefix):]] = v
+		}
+	}
+	return exchange, routingKey, headers, nil
 }

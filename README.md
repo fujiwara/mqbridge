@@ -240,30 +240,63 @@ local secret = std.native('secret');
 }
 ```
 
-### SimpleMQ Message Encoding
+### Message Format
 
-SimpleMQ message content must be **base64-encoded**. When mqbridge receives a message from SimpleMQ, it decodes the content from base64 before processing. If the content is not valid base64, the message is logged as an error and **deleted** from the queue to prevent infinite retry loops.
+mqbridge uses a structured [`Message`](https://pkg.go.dev/github.com/fujiwara/mqbridge#Message) type internally, consisting of `Body` (raw bytes) and `Headers` (string key-value pairs). This allows metadata to flow through the bridge without loss.
 
-When mqbridge publishes to SimpleMQ (RabbitMQ → SimpleMQ direction), it automatically base64-encodes the message body. External producers sending messages to a SimpleMQ queue consumed by mqbridge must also base64-encode the content.
+#### Wire format on SimpleMQ
 
-### SimpleMQ → RabbitMQ Message Format
-
-Messages from SimpleMQ to RabbitMQ must be base64-encoded JSON in the following format:
+Messages stored in SimpleMQ are base64-encoded JSON:
 
 ```json
 {
-  "exchange": "my-exchange",
-  "routing_key": "my.routing.key",
-  "headers": { "content-type": "application/json" },
-  "body": "actual message content"
+  "headers": {
+    "rabbitmq.exchange": "my-exchange",
+    "rabbitmq.routing_key": "my.routing.key",
+    "rabbitmq.header.x-custom": "value"
+  },
+  "body": "message body as UTF-8 string"
 }
 ```
 
-- `exchange` and `routing_key` are required.
-- `headers` is optional.
-- The content of `body` is published to RabbitMQ.
+- `headers` is optional. When absent, the message has no metadata.
+- `body` is the message body. For UTF-8 text, it is stored as a plain string. For binary data (non-UTF-8), it is automatically base64-encoded.
+- `body_encoding` (auto-set): When `body` is base64-encoded, this field is set to `"base64"` so the receiver can decode it. No configuration is needed — encoding is determined automatically based on whether the body is valid UTF-8.
 
-This message format is defined as the exported [`RabbitMQMessage`](https://pkg.go.dev/github.com/fujiwara/mqbridge#RabbitMQMessage) struct in the `mqbridge` package. You can use `mqbridge.RabbitMQMessage` and [`mqbridge.ParseRabbitMQMessage()`](https://pkg.go.dev/github.com/fujiwara/mqbridge#ParseRabbitMQMessage) to construct or parse messages programmatically.
+For backward compatibility, if the base64-decoded content is not valid JSON in this format, it is treated as a plain body with no headers.
+
+#### RabbitMQ → SimpleMQ
+
+When consuming from RabbitMQ, the subscriber captures delivery metadata into `Message.Headers` with `rabbitmq.*` prefixed keys:
+
+| Header key | AMQP field |
+|------------|------------|
+| `rabbitmq.exchange` | Exchange |
+| `rabbitmq.routing_key` | RoutingKey |
+| `rabbitmq.reply_to` | ReplyTo |
+| `rabbitmq.correlation_id` | CorrelationId |
+| `rabbitmq.content_type` | ContentType |
+| `rabbitmq.message_id` | MessageId |
+| `rabbitmq.header.<key>` | Custom AMQP headers |
+
+This means RPC-related fields (`reply_to`, `correlation_id`) are preserved when forwarding to SimpleMQ, enabling request-reply patterns across the bridge.
+
+#### SimpleMQ → RabbitMQ
+
+When publishing to RabbitMQ, the publisher reads the destination from `Message.Headers`:
+
+- `rabbitmq.exchange` (required) — target exchange
+- `rabbitmq.routing_key` (required) — routing key
+- `rabbitmq.reply_to`, `rabbitmq.correlation_id`, `rabbitmq.content_type`, `rabbitmq.message_id` — mapped to the corresponding AMQP fields
+- `rabbitmq.header.<key>` — published as custom AMQP headers (prefix stripped)
+
+External producers sending messages to a SimpleMQ queue for RabbitMQ delivery must use the wire format above with the required `rabbitmq.exchange` and `rabbitmq.routing_key` headers.
+
+#### SimpleMQ → SimpleMQ
+
+Messages are forwarded as-is (re-serialized in the same wire format). No RabbitMQ-specific headers are added unless the original message already contained them.
+
+You can use [`mqbridge.MarshalMessage()`](https://pkg.go.dev/github.com/fujiwara/mqbridge#MarshalMessage) and [`mqbridge.UnmarshalMessage()`](https://pkg.go.dev/github.com/fujiwara/mqbridge#UnmarshalMessage) to construct or parse messages programmatically.
 
 ## Metrics
 

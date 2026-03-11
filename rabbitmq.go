@@ -27,7 +27,7 @@ func NewRabbitMQSubscriber(config FromRabbitMQConfig, logger *slog.Logger) *Rabb
 
 // Subscribe starts consuming messages from the RabbitMQ queue with automatic
 // reconnection on connection loss. It uses exponential backoff between retries.
-func (s *RabbitMQSubscriber) Subscribe(ctx context.Context, handler func(ctx context.Context, msg []byte) error) error {
+func (s *RabbitMQSubscriber) Subscribe(ctx context.Context, handler func(ctx context.Context, msg *Message) error) error {
 	const (
 		initialBackoff = 1 * time.Second
 		maxBackoff     = 30 * time.Second
@@ -64,7 +64,7 @@ func (s *RabbitMQSubscriber) Subscribe(ctx context.Context, handler func(ctx con
 
 // subscribeOnce connects to RabbitMQ, declares the exchange/queue, and consumes
 // messages until the connection is lost or the context is cancelled.
-func (s *RabbitMQSubscriber) subscribeOnce(ctx context.Context, handler func(ctx context.Context, msg []byte) error) error {
+func (s *RabbitMQSubscriber) subscribeOnce(ctx context.Context, handler func(ctx context.Context, msg *Message) error) error {
 	if err := s.connect(); err != nil {
 		return err
 	}
@@ -151,9 +151,10 @@ func (s *RabbitMQSubscriber) subscribeOnce(ctx context.Context, handler func(ctx
 			if !ok {
 				return fmt.Errorf("RabbitMQ channel closed for queue %q", s.config.Queue)
 			}
+			msg := messageFromDelivery(delivery)
 			// Use a non-cancellable context so in-flight message processing
 			// completes even when the parent context is cancelled.
-			if err := handler(context.WithoutCancel(ctx), delivery.Body); err != nil {
+			if err := handler(context.WithoutCancel(ctx), msg); err != nil {
 				s.logger.Error("failed to handle message, nacking",
 					"queue", s.config.Queue,
 					"error", err,
@@ -218,36 +219,50 @@ func NewRabbitMQPublisher(config ToRabbitMQConfig, logger *slog.Logger) *RabbitM
 	return &RabbitMQPublisher{config: config, logger: logger}
 }
 
-// Publish parses the message JSON and publishes to the specified exchange/routing key.
-func (p *RabbitMQPublisher) Publish(ctx context.Context, msg []byte) (*PublishResult, error) {
+// Publish sends a Message to RabbitMQ. The destination exchange, routing key,
+// and custom AMQP headers are read from the Message headers.
+func (p *RabbitMQPublisher) Publish(ctx context.Context, msg *Message) (*PublishResult, error) {
 	if err := p.ensureConnected(); err != nil {
 		return nil, fmt.Errorf("failed to ensure RabbitMQ connection: %w", err)
 	}
-	rmqMsg, err := ParseRabbitMQMessage(msg)
+	exchange, routingKey, customHeaders, err := msg.RabbitMQPublishParams()
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse message: %w", err)
+		return nil, fmt.Errorf("failed to extract RabbitMQ params: %w", err)
 	}
 	headers := make(amqp.Table)
-	for k, v := range rmqMsg.Headers {
+	for k, v := range customHeaders {
 		headers[k] = v
+	}
+	pub := amqp.Publishing{
+		Headers:      headers,
+		Body:         msg.Body,
+		DeliveryMode: amqp.Persistent,
+		Timestamp:    time.Now(),
+	}
+	if v := msg.Headers[HeaderRabbitMQReplyTo]; v != "" {
+		pub.ReplyTo = v
+	}
+	if v := msg.Headers[HeaderRabbitMQCorrelationID]; v != "" {
+		pub.CorrelationId = v
+	}
+	if v := msg.Headers[HeaderRabbitMQContentType]; v != "" {
+		pub.ContentType = v
+	}
+	if v := msg.Headers[HeaderRabbitMQMessageID]; v != "" {
+		pub.MessageId = v
 	}
 	if err := p.ch.PublishWithContext(
 		ctx,
-		rmqMsg.Exchange,
-		rmqMsg.RoutingKey,
+		exchange,
+		routingKey,
 		false, // mandatory
 		false, // immediate
-		amqp.Publishing{
-			Headers:      headers,
-			Body:         []byte(rmqMsg.Body),
-			DeliveryMode: amqp.Persistent,
-			Timestamp:    time.Now(),
-		},
+		pub,
 	); err != nil {
-		return nil, fmt.Errorf("failed to publish to RabbitMQ exchange %q: %w", rmqMsg.Exchange, err)
+		return nil, fmt.Errorf("failed to publish to RabbitMQ exchange %q: %w", exchange, err)
 	}
 	return &PublishResult{
-		Destination: rmqMsg.Exchange,
+		Destination: exchange,
 	}, nil
 }
 
@@ -271,6 +286,34 @@ func (p *RabbitMQPublisher) Close() error {
 		return fmt.Errorf("errors closing RabbitMQ publisher: %v", errs)
 	}
 	return nil
+}
+
+// messageFromDelivery constructs a Message from an AMQP delivery,
+// mapping delivery metadata to rabbitmq.* headers.
+func messageFromDelivery(d amqp.Delivery) *Message {
+	headers := map[string]string{
+		HeaderRabbitMQExchange:   d.Exchange,
+		HeaderRabbitMQRoutingKey: d.RoutingKey,
+	}
+	if d.ReplyTo != "" {
+		headers[HeaderRabbitMQReplyTo] = d.ReplyTo
+	}
+	if d.CorrelationId != "" {
+		headers[HeaderRabbitMQCorrelationID] = d.CorrelationId
+	}
+	if d.ContentType != "" {
+		headers[HeaderRabbitMQContentType] = d.ContentType
+	}
+	if d.MessageId != "" {
+		headers[HeaderRabbitMQMessageID] = d.MessageId
+	}
+	for k, v := range d.Headers {
+		headers[HeaderRabbitMQHeaderPrefix+k] = fmt.Sprintf("%v", v)
+	}
+	return &Message{
+		Body:    d.Body,
+		Headers: headers,
+	}
 }
 
 func (p *RabbitMQPublisher) ensureConnected() error {
