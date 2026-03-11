@@ -2,6 +2,7 @@ package mqbridge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -13,7 +14,7 @@ import (
 
 // Subscriber consumes messages from a source.
 type Subscriber interface {
-	Subscribe(ctx context.Context, handler func(ctx context.Context, msg []byte) error) error
+	Subscribe(ctx context.Context, handler func(ctx context.Context, msg *Message) error) error
 	Close() error
 }
 
@@ -24,7 +25,7 @@ type PublishResult struct {
 
 // Publisher sends messages to a destination.
 type Publisher interface {
-	Publish(ctx context.Context, msg []byte) (*PublishResult, error)
+	Publish(ctx context.Context, msg *Message) (*PublishResult, error)
 	// Type returns the publisher type name (e.g. "rabbitmq", "simplemq").
 	Type() string
 	Close() error
@@ -45,17 +46,27 @@ type Bridge struct {
 // Run starts the bridge, consuming messages from the subscriber
 // and publishing to all publishers.
 func (b *Bridge) Run(ctx context.Context) error {
-	return b.From.Subscribe(ctx, func(ctx context.Context, msg []byte) error {
+	return b.From.Subscribe(ctx, func(ctx context.Context, msg *Message) error {
 		b.metrics.messagesReceived.Add(ctx, 1, metric.WithAttributeSet(b.srcAttrs))
 		b.logger.Debug("message received",
 			"source_type", b.srcType,
 			"source_queue", b.srcQueue,
-			"size", len(msg),
+			"size", len(msg.Body),
 		)
 		start := time.Now()
 		for _, pub := range b.To {
 			result, err := pub.Publish(ctx, msg)
 			if err != nil {
+				var msgErr *MessageError
+				if errors.As(err, &msgErr) {
+					// Message content error: drop the message to avoid infinite retries.
+					b.metrics.messagesDropped.Add(ctx, 1, metric.WithAttributeSet(b.srcAttrs))
+					b.logger.Error("dropping malformed message",
+						"destination_type", pub.Type(),
+						"error", err,
+					)
+					return nil
+				}
 				b.metrics.messageErrors.Add(ctx, 1, metric.WithAttributeSet(b.srcAttrs))
 				b.logger.Error("failed to publish message",
 					"destination_type", pub.Type(),

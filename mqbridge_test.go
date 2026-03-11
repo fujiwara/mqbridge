@@ -3,7 +3,6 @@ package mqbridge_test
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
@@ -120,19 +119,7 @@ func (e *testEnv) publishToRabbitMQ(exchange, routingKey, body string) {
 	}
 }
 
-func (e *testEnv) sendToSimpleMQ(queue, body string) {
-	e.t.Helper()
-	encoded := base64.StdEncoding.EncodeToString([]byte(body))
-	_, err := e.smqClient.SendMessage(e.ctx,
-		&message.SendRequest{Content: message.MessageContent(encoded)},
-		message.SendMessageParams{QueueName: message.QueueName(queue)},
-	)
-	if err != nil {
-		e.t.Fatalf("failed to send to SimpleMQ: %v", err)
-	}
-}
-
-func (e *testEnv) receiveFromSimpleMQ(queue string) string {
+func (e *testEnv) receiveFromSimpleMQ(queue string) *mqbridge.Message {
 	e.t.Helper()
 	for range 20 {
 		time.Sleep(200 * time.Millisecond)
@@ -150,9 +137,25 @@ func (e *testEnv) receiveFromSimpleMQ(queue string) string {
 		if err != nil {
 			e.t.Fatalf("failed to decode message from queue %s: %v", queue, err)
 		}
-		return string(decoded)
+		return mqbridge.UnmarshalMessage(decoded)
 	}
-	return ""
+	return nil
+}
+
+func (e *testEnv) sendMessageToSimpleMQ(queue string, msg *mqbridge.Message) {
+	e.t.Helper()
+	data, err := mqbridge.MarshalMessage(msg)
+	if err != nil {
+		e.t.Fatalf("failed to marshal message: %v", err)
+	}
+	encoded := base64.StdEncoding.EncodeToString(data)
+	_, err = e.smqClient.SendMessage(e.ctx,
+		&message.SendRequest{Content: message.MessageContent(encoded)},
+		message.SendMessageParams{QueueName: message.QueueName(queue)},
+	)
+	if err != nil {
+		e.t.Fatalf("failed to send to SimpleMQ: %v", err)
+	}
 }
 
 func TestRabbitMQToSimpleMQ(t *testing.T) {
@@ -179,8 +182,18 @@ func TestRabbitMQToSimpleMQ(t *testing.T) {
 	testBody := fmt.Sprintf("msg-%s-%d", t.Name(), time.Now().UnixNano())
 	env.publishToRabbitMQ(exchange, "test.key", testBody)
 
-	if received := env.receiveFromSimpleMQ(dest); received != testBody {
-		t.Errorf("expected %q, got %q", testBody, received)
+	received := env.receiveFromSimpleMQ(dest)
+	if received == nil {
+		t.Fatal("expected message, got nil")
+	}
+	if string(received.Body) != testBody {
+		t.Errorf("body: expected %q, got %q", testBody, string(received.Body))
+	}
+	if received.Headers[mqbridge.HeaderRabbitMQExchange] != exchange {
+		t.Errorf("exchange header: expected %q, got %q", exchange, received.Headers[mqbridge.HeaderRabbitMQExchange])
+	}
+	if received.Headers[mqbridge.HeaderRabbitMQRoutingKey] != "test.key" {
+		t.Errorf("routing_key header: expected %q, got %q", "test.key", received.Headers[mqbridge.HeaderRabbitMQRoutingKey])
 	}
 }
 
@@ -213,8 +226,13 @@ func TestRabbitMQToSimpleMQFanout(t *testing.T) {
 	env.publishToRabbitMQ(exchange, "test.key", testBody)
 
 	for _, dq := range []string{dest1, dest2, dest3} {
-		if received := env.receiveFromSimpleMQ(dq); received != testBody {
-			t.Errorf("queue %s: expected %q, got %q", dq, testBody, received)
+		received := env.receiveFromSimpleMQ(dq)
+		if received == nil {
+			t.Errorf("queue %s: expected message, got nil", dq)
+			continue
+		}
+		if string(received.Body) != testBody {
+			t.Errorf("queue %s: expected %q, got %q", dq, testBody, string(received.Body))
 		}
 	}
 }
@@ -255,8 +273,12 @@ func TestRabbitMQToSimpleMQExchangePassive(t *testing.T) {
 	testBody := fmt.Sprintf("msg-%s-%d", t.Name(), time.Now().UnixNano())
 	env.publishToRabbitMQ(exchange, "test.key", testBody)
 
-	if received := env.receiveFromSimpleMQ(dest); received != testBody {
-		t.Errorf("expected %q, got %q", testBody, received)
+	received := env.receiveFromSimpleMQ(dest)
+	if received == nil {
+		t.Fatal("expected message, got nil")
+	}
+	if string(received.Body) != testBody {
+		t.Errorf("expected %q, got %q", testBody, string(received.Body))
 	}
 }
 
@@ -281,10 +303,14 @@ func TestSimpleMQToSimpleMQ(t *testing.T) {
 	defer stop()
 
 	testBody := fmt.Sprintf("msg-%s-%d", t.Name(), time.Now().UnixNano())
-	env.sendToSimpleMQ(inbound, testBody)
+	env.sendMessageToSimpleMQ(inbound, &mqbridge.Message{Body: []byte(testBody)})
 
-	if received := env.receiveFromSimpleMQ(dest); received != testBody {
-		t.Errorf("expected %q, got %q", testBody, received)
+	received := env.receiveFromSimpleMQ(dest)
+	if received == nil {
+		t.Fatal("expected message, got nil")
+	}
+	if string(received.Body) != testBody {
+		t.Errorf("expected %q, got %q", testBody, string(received.Body))
 	}
 }
 
@@ -313,11 +339,16 @@ func TestSimpleMQToSimpleMQFanout(t *testing.T) {
 	defer stop()
 
 	testBody := fmt.Sprintf("msg-%s-%d", t.Name(), time.Now().UnixNano())
-	env.sendToSimpleMQ(inbound, testBody)
+	env.sendMessageToSimpleMQ(inbound, &mqbridge.Message{Body: []byte(testBody)})
 
 	for _, dq := range []string{dest1, dest2, dest3} {
-		if received := env.receiveFromSimpleMQ(dq); received != testBody {
-			t.Errorf("queue %s: expected %q, got %q", dq, testBody, received)
+		received := env.receiveFromSimpleMQ(dq)
+		if received == nil {
+			t.Errorf("queue %s: expected message, got nil", dq)
+			continue
+		}
+		if string(received.Body) != testBody {
+			t.Errorf("queue %s: expected %q, got %q", dq, testBody, string(received.Body))
 		}
 	}
 }
@@ -369,13 +400,13 @@ func TestSimpleMQToRabbitMQ(t *testing.T) {
 	defer stop()
 
 	testBody := fmt.Sprintf("msg-%s-%d", t.Name(), time.Now().UnixNano())
-	rmqMsg := mqbridge.RabbitMQMessage{
-		Exchange:   destExchange,
-		RoutingKey: "test.key",
-		Body:       testBody,
-	}
-	msgJSON, _ := json.Marshal(rmqMsg)
-	env.sendToSimpleMQ(inbound, string(msgJSON))
+	env.sendMessageToSimpleMQ(inbound, &mqbridge.Message{
+		Body: []byte(testBody),
+		Headers: map[string]string{
+			mqbridge.HeaderRabbitMQExchange:   destExchange,
+			mqbridge.HeaderRabbitMQRoutingKey: "test.key",
+		},
+	})
 
 	select {
 	case delivery := <-deliveries:
