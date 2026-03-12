@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.1.1](https://github.com/fujiwara/mqbridge/compare/v0.1.0...v0.1.1) - 2026-03-12
+- Use sscli.SecretNativeFunction instead of duplicated code by @fujiwara in https://github.com/fujiwara/mqbridge/pull/29
+
 ## [v0.1.0](https://github.com/fujiwara/mqbridge/compare/v0.0.4...v0.1.0) - 2026-03-11
 - Update simplemq-cli to v0.4.0 by @fujiwara in https://github.com/fujiwara/mqbridge/pull/25
 - Introduce structured Message type to preserve metadata across bridges by @fujiwara in https://github.com/fujiwara/mqbridge/pull/27
