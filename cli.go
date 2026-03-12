@@ -33,11 +33,11 @@ func RunCLI(ctx context.Context) error {
 		kong.BindTo(ctx, (*context.Context)(nil)),
 	)
 	setupLogger(cli.LogFormat, cli.LogLevel)
-	shutdownMetrics, err := setupMeterProvider(ctx)
+	shutdownOTel, err := setupOTelProviders(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to setup meter provider: %w", err)
+		return fmt.Errorf("failed to setup OpenTelemetry providers: %w", err)
 	}
-	defer shutdownMetrics(ctx)
+	defer shutdownOTel(ctx)
 	return kctx.Run(cli)
 }
 
@@ -104,7 +104,7 @@ func setupLogger(format, level string) {
 			Source:         true,
 		})
 	}
-	slog.SetDefault(slog.New(handler))
+	slog.SetDefault(slog.New(newTraceHandler(handler)))
 }
 
 // RenderConfigTo evaluates a config file and writes pretty-printed JSON to w.

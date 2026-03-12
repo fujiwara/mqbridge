@@ -5,12 +5,16 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 
 	"github.com/fujiwara/mqbridge"
 	"github.com/fujiwara/simplemq-cli/localserver"
 	amqp "github.com/rabbitmq/amqp091-go"
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+
 	"github.com/sacloud/simplemq-api-go/apis/v1/message"
 )
 
@@ -106,13 +110,19 @@ func (e *testEnv) runBridge(bridges []mqbridge.BridgeConfig) context.CancelFunc 
 
 func (e *testEnv) publishToRabbitMQ(exchange, routingKey, body string) {
 	e.t.Helper()
+	e.publishToRabbitMQWithHeaders(exchange, routingKey, body, nil)
+}
+
+func (e *testEnv) publishToRabbitMQWithHeaders(exchange, routingKey, body string, headers amqp.Table) {
+	e.t.Helper()
 	ch, err := e.rmqConn.Channel()
 	if err != nil {
 		e.t.Fatalf("failed to open channel: %v", err)
 	}
 	defer ch.Close()
 	err = ch.PublishWithContext(e.ctx, exchange, routingKey, false, false, amqp.Publishing{
-		Body: []byte(body),
+		Body:    []byte(body),
+		Headers: headers,
 	})
 	if err != nil {
 		e.t.Fatalf("failed to publish: %v", err)
@@ -413,6 +423,310 @@ func TestSimpleMQToRabbitMQ(t *testing.T) {
 		if string(delivery.Body) != testBody {
 			t.Errorf("expected %q, got %q", testBody, string(delivery.Body))
 		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("timeout waiting for message in RabbitMQ")
+	}
+}
+
+// traceparentRe matches a valid W3C traceparent header value.
+var traceparentRe = regexp.MustCompile(`^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$`)
+
+func setupTestTracerProvider(t *testing.T) {
+	t.Helper()
+	// If OTEL_EXPORTER_OTLP_ENDPOINT is set, use the real provider so
+	// spans are exported to the collector for manual inspection.
+	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" {
+		shutdown, err := mqbridge.SetupOTelProvidersForTest(context.Background())
+		if err != nil {
+			t.Fatalf("failed to setup OTel providers: %v", err)
+		}
+		t.Cleanup(func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := shutdown(ctx); err != nil {
+				t.Logf("OTel shutdown: %v", err)
+			}
+		})
+		return
+	}
+	tp := sdktrace.NewTracerProvider()
+	otel.SetTracerProvider(tp)
+	t.Cleanup(func() { tp.Shutdown(t.Context()) })
+}
+
+// TestRabbitMQToSimpleMQTraceInjection verifies that the bridge injects
+// a traceparent header into outgoing SimpleMQ messages even when the
+// incoming RabbitMQ message has no trace context.
+func TestRabbitMQToSimpleMQTraceInjection(t *testing.T) {
+	setupTestTracerProvider(t)
+
+	env := newTestEnv(t, true)
+	exchange := env.uniqueName("trace-inj-exchange")
+	queue := env.uniqueName("trace-inj-queue")
+	dest := env.uniqueName("trace-inj-dest")
+
+	stop := env.runBridge([]mqbridge.BridgeConfig{
+		{
+			From: mqbridge.FromConfig{
+				RabbitMQ: &mqbridge.FromRabbitMQConfig{
+					Queue: queue, Exchange: exchange,
+					ExchangeType: "topic", RoutingKey: "#",
+				},
+			},
+			To: []mqbridge.ToConfig{
+				{SimpleMQ: &mqbridge.ToSimpleMQConfig{Queue: dest, APIKey: testAPIKey}},
+			},
+		},
+	})
+	defer stop()
+
+	testBody := fmt.Sprintf("msg-%s-%d", t.Name(), time.Now().UnixNano())
+	env.publishToRabbitMQ(exchange, "test.key", testBody)
+
+	received := env.receiveFromSimpleMQ(dest)
+	if received == nil {
+		t.Fatal("expected message, got nil")
+	}
+	if string(received.Body) != testBody {
+		t.Errorf("body: expected %q, got %q", testBody, string(received.Body))
+	}
+	tp := received.Headers["traceparent"]
+	if !traceparentRe.MatchString(tp) {
+		t.Errorf("expected valid traceparent header, got %q", tp)
+	}
+	t.Logf("traceparent: %s", tp)
+}
+
+// TestRabbitMQToSimpleMQTracePreservation verifies that when a RabbitMQ message
+// carries a traceparent AMQP header, the bridge preserves the same trace_id
+// in the outgoing SimpleMQ message.
+func TestRabbitMQToSimpleMQTracePreservation(t *testing.T) {
+	setupTestTracerProvider(t)
+
+	env := newTestEnv(t, true)
+	exchange := env.uniqueName("trace-pres-exchange")
+	queue := env.uniqueName("trace-pres-queue")
+	dest := env.uniqueName("trace-pres-dest")
+
+	stop := env.runBridge([]mqbridge.BridgeConfig{
+		{
+			From: mqbridge.FromConfig{
+				RabbitMQ: &mqbridge.FromRabbitMQConfig{
+					Queue: queue, Exchange: exchange,
+					ExchangeType: "topic", RoutingKey: "#",
+				},
+			},
+			To: []mqbridge.ToConfig{
+				{SimpleMQ: &mqbridge.ToSimpleMQConfig{Queue: dest, APIKey: testAPIKey}},
+			},
+		},
+	})
+	defer stop()
+
+	// Publish with a known traceparent AMQP header
+	originalTraceID := "abcdef1234567890abcdef1234567890"
+	originalTraceparent := "00-" + originalTraceID + "-1234567890abcdef-01"
+	testBody := fmt.Sprintf("msg-%s-%d", t.Name(), time.Now().UnixNano())
+	env.publishToRabbitMQWithHeaders(exchange, "test.key", testBody, amqp.Table{
+		"traceparent": originalTraceparent,
+	})
+
+	received := env.receiveFromSimpleMQ(dest)
+	if received == nil {
+		t.Fatal("expected message, got nil")
+	}
+	tp := received.Headers["traceparent"]
+	if !traceparentRe.MatchString(tp) {
+		t.Fatalf("expected valid traceparent, got %q", tp)
+	}
+	// The trace_id (32 hex chars after "00-") must match the original
+	receivedTraceID := tp[3:35]
+	if receivedTraceID != originalTraceID {
+		t.Errorf("trace_id: expected %q, got %q", originalTraceID, receivedTraceID)
+	}
+	t.Logf("original traceparent: %s", originalTraceparent)
+	t.Logf("received traceparent: %s", tp)
+}
+
+// TestRabbitMQToSimpleMQFanoutTraceID verifies that all fan-out destinations
+// receive the same trace_id.
+func TestRabbitMQToSimpleMQFanoutTraceID(t *testing.T) {
+	setupTestTracerProvider(t)
+
+	env := newTestEnv(t, true)
+	exchange := env.uniqueName("trace-fan-exchange")
+	queue := env.uniqueName("trace-fan-queue")
+	dest1 := env.uniqueName("trace-fan-dest1")
+	dest2 := env.uniqueName("trace-fan-dest2")
+
+	stop := env.runBridge([]mqbridge.BridgeConfig{
+		{
+			From: mqbridge.FromConfig{
+				RabbitMQ: &mqbridge.FromRabbitMQConfig{
+					Queue: queue, Exchange: exchange,
+					ExchangeType: "topic", RoutingKey: "#",
+				},
+			},
+			To: []mqbridge.ToConfig{
+				{SimpleMQ: &mqbridge.ToSimpleMQConfig{Queue: dest1, APIKey: testAPIKey}},
+				{SimpleMQ: &mqbridge.ToSimpleMQConfig{Queue: dest2, APIKey: testAPIKey}},
+			},
+		},
+	})
+	defer stop()
+
+	testBody := fmt.Sprintf("msg-%s-%d", t.Name(), time.Now().UnixNano())
+	env.publishToRabbitMQ(exchange, "test.key", testBody)
+
+	recv1 := env.receiveFromSimpleMQ(dest1)
+	recv2 := env.receiveFromSimpleMQ(dest2)
+	if recv1 == nil || recv2 == nil {
+		t.Fatal("expected messages on both destinations")
+	}
+	tp1 := recv1.Headers["traceparent"]
+	tp2 := recv2.Headers["traceparent"]
+	if !traceparentRe.MatchString(tp1) || !traceparentRe.MatchString(tp2) {
+		t.Fatalf("invalid traceparent: dest1=%q, dest2=%q", tp1, tp2)
+	}
+	traceID1 := tp1[3:35]
+	traceID2 := tp2[3:35]
+	if traceID1 != traceID2 {
+		t.Errorf("trace_id mismatch across fan-out: dest1=%q, dest2=%q", traceID1, traceID2)
+	}
+	t.Logf("fan-out trace_id: %s", traceID1)
+}
+
+// TestSimpleMQToSimpleMQTracePreservation verifies trace context propagation
+// through SimpleMQ → SimpleMQ bridging.
+func TestSimpleMQToSimpleMQTracePreservation(t *testing.T) {
+	setupTestTracerProvider(t)
+
+	env := newTestEnv(t, false)
+	inbound := env.uniqueName("trace-smq-inbound")
+	dest := env.uniqueName("trace-smq-dest")
+
+	stop := env.runBridge([]mqbridge.BridgeConfig{
+		{
+			From: mqbridge.FromConfig{
+				SimpleMQ: &mqbridge.FromSimpleMQConfig{
+					Queue: inbound, APIKey: testAPIKey,
+					PollingInterval: "100ms",
+				},
+			},
+			To: []mqbridge.ToConfig{
+				{SimpleMQ: &mqbridge.ToSimpleMQConfig{Queue: dest, APIKey: testAPIKey}},
+			},
+		},
+	})
+	defer stop()
+
+	originalTraceID := "11223344556677889900aabbccddeeff"
+	originalTraceparent := "00-" + originalTraceID + "-aabbccddeeff0011-01"
+	testBody := fmt.Sprintf("msg-%s-%d", t.Name(), time.Now().UnixNano())
+	env.sendMessageToSimpleMQ(inbound, &mqbridge.Message{
+		Body: []byte(testBody),
+		Headers: map[string]string{
+			"traceparent": originalTraceparent,
+		},
+	})
+
+	received := env.receiveFromSimpleMQ(dest)
+	if received == nil {
+		t.Fatal("expected message, got nil")
+	}
+	tp := received.Headers["traceparent"]
+	if !traceparentRe.MatchString(tp) {
+		t.Fatalf("expected valid traceparent, got %q", tp)
+	}
+	receivedTraceID := tp[3:35]
+	if receivedTraceID != originalTraceID {
+		t.Errorf("trace_id: expected %q, got %q", originalTraceID, receivedTraceID)
+	}
+	t.Logf("original: %s", originalTraceparent)
+	t.Logf("received: %s", tp)
+}
+
+// TestSimpleMQToRabbitMQTracePreservation verifies that trace context from
+// a SimpleMQ message is propagated to the RabbitMQ AMQP header.
+func TestSimpleMQToRabbitMQTracePreservation(t *testing.T) {
+	setupTestTracerProvider(t)
+
+	env := newTestEnv(t, true)
+	inbound := env.uniqueName("trace-s2r-inbound")
+	destExchange := env.uniqueName("trace-s2r-exchange")
+	destQueue := env.uniqueName("trace-s2r-rmq")
+
+	ch, err := env.rmqConn.Channel()
+	if err != nil {
+		t.Fatalf("failed to open channel: %v", err)
+	}
+	defer ch.Close()
+
+	err = ch.ExchangeDeclare(destExchange, "topic", true, false, false, false, nil)
+	if err != nil {
+		t.Fatalf("failed to declare exchange: %v", err)
+	}
+	_, err = ch.QueueDeclare(destQueue, true, false, false, false, nil)
+	if err != nil {
+		t.Fatalf("failed to declare queue: %v", err)
+	}
+	err = ch.QueueBind(destQueue, "#", destExchange, false, nil)
+	if err != nil {
+		t.Fatalf("failed to bind queue: %v", err)
+	}
+
+	deliveries, err := ch.ConsumeWithContext(env.ctx, destQueue, "", true, false, false, false, nil)
+	if err != nil {
+		t.Fatalf("failed to consume: %v", err)
+	}
+
+	stop := env.runBridge([]mqbridge.BridgeConfig{
+		{
+			From: mqbridge.FromConfig{
+				SimpleMQ: &mqbridge.FromSimpleMQConfig{
+					Queue: inbound, APIKey: testAPIKey,
+					PollingInterval: "100ms",
+				},
+			},
+			To: []mqbridge.ToConfig{
+				{RabbitMQ: &mqbridge.ToRabbitMQConfig{}},
+			},
+		},
+	})
+	defer stop()
+
+	originalTraceID := "ffeeddccbbaa00998877665544332211"
+	originalTraceparent := "00-" + originalTraceID + "-0011223344556677-01"
+	testBody := fmt.Sprintf("msg-%s-%d", t.Name(), time.Now().UnixNano())
+	env.sendMessageToSimpleMQ(inbound, &mqbridge.Message{
+		Body: []byte(testBody),
+		Headers: map[string]string{
+			mqbridge.HeaderRabbitMQExchange:   destExchange,
+			mqbridge.HeaderRabbitMQRoutingKey: "test.key",
+			"traceparent":                     originalTraceparent,
+		},
+	})
+
+	select {
+	case delivery := <-deliveries:
+		if string(delivery.Body) != testBody {
+			t.Errorf("body: expected %q, got %q", testBody, string(delivery.Body))
+		}
+		// traceparent is injected into message headers, which become
+		// rabbitmq.header.traceparent in the AMQP custom headers.
+		tp, ok := delivery.Headers["traceparent"]
+		if !ok {
+			t.Fatal("expected traceparent AMQP header")
+		}
+		tpStr := fmt.Sprintf("%v", tp)
+		if !traceparentRe.MatchString(tpStr) {
+			t.Fatalf("expected valid traceparent, got %q", tpStr)
+		}
+		receivedTraceID := tpStr[3:35]
+		if receivedTraceID != originalTraceID {
+			t.Errorf("trace_id: expected %q, got %q", originalTraceID, receivedTraceID)
+		}
+		t.Logf("AMQP traceparent header: %s", tpStr)
 	case <-time.After(10 * time.Second):
 		t.Fatal("timeout waiting for message in RabbitMQ")
 	}
