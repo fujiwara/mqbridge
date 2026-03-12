@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Subscriber consumes messages from a source.
@@ -36,6 +38,7 @@ type Bridge struct {
 	From       Subscriber
 	To         []Publisher
 	metrics    *Metrics
+	tracer     trace.Tracer
 	srcAttrs   attribute.Set
 	srcType    string
 	srcQueue   string
@@ -47,47 +50,84 @@ type Bridge struct {
 // and publishing to all publishers.
 func (b *Bridge) Run(ctx context.Context) error {
 	return b.From.Subscribe(ctx, func(ctx context.Context, msg *Message) error {
+		// Extract trace context from incoming message headers
+		ctx = extractTraceContext(ctx, msg.Headers)
+
+		ctx, span := b.tracer.Start(ctx, "mqbridge.bridge",
+			trace.WithAttributes(
+				attribute.String("bridge", b.bridgeName),
+				attribute.String("source_type", b.srcType),
+				attribute.String("source_queue", b.srcQueue),
+			),
+		)
+		defer span.End()
+
 		b.metrics.messagesReceived.Add(ctx, 1, metric.WithAttributeSet(b.srcAttrs))
-		b.logger.Debug("message received",
+		b.logger.DebugContext(ctx, "message received",
 			"source_type", b.srcType,
 			"source_queue", b.srcQueue,
 			"size", len(msg.Body),
 		)
 		start := time.Now()
 		for _, pub := range b.To {
-			result, err := pub.Publish(ctx, msg)
-			if err != nil {
+			// Inject trace context into outgoing message headers
+			injectTraceContext(ctx, msg.Headers)
+
+			if err := b.publish(ctx, pub, msg); err != nil {
 				var msgErr *MessageError
 				if errors.As(err, &msgErr) {
-					// Message content error: drop the message to avoid infinite retries.
 					b.metrics.messagesDropped.Add(ctx, 1, metric.WithAttributeSet(b.srcAttrs))
-					b.logger.Error("dropping malformed message",
+					b.logger.ErrorContext(ctx, "dropping malformed message",
 						"destination_type", pub.Type(),
 						"error", err,
 					)
+					span.RecordError(err)
+					span.SetStatus(codes.Error, "malformed message dropped")
 					return nil
 				}
 				b.metrics.messageErrors.Add(ctx, 1, metric.WithAttributeSet(b.srcAttrs))
-				b.logger.Error("failed to publish message",
+				b.logger.ErrorContext(ctx, "failed to publish message",
 					"destination_type", pub.Type(),
 					"error", err,
 				)
+				span.RecordError(err)
+				span.SetStatus(codes.Error, "publish failed")
 				return fmt.Errorf("publish error: %w", err)
 			}
-			dstAttrs := attribute.NewSet(
-				attribute.String("bridge", b.bridgeName),
-				attribute.String("destination_type", pub.Type()),
-				attribute.String("destination_queue", result.Destination),
-			)
-			b.metrics.messagesPublished.Add(ctx, 1, metric.WithAttributeSet(dstAttrs))
-			b.logger.Debug("message published",
-				"destination_type", pub.Type(),
-				"destination_queue", result.Destination,
-			)
 		}
 		b.metrics.processingDuration.Record(ctx, time.Since(start).Seconds(), metric.WithAttributeSet(b.srcAttrs))
 		return nil
 	})
+}
+
+// publish sends a message to a single publisher with a child span.
+func (b *Bridge) publish(ctx context.Context, pub Publisher, msg *Message) error {
+	ctx, span := b.tracer.Start(ctx, "mqbridge.publish",
+		trace.WithAttributes(
+			attribute.String("bridge", b.bridgeName),
+			attribute.String("destination_type", pub.Type()),
+		),
+	)
+	defer span.End()
+
+	result, err := pub.Publish(ctx, msg)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "publish failed")
+		return err
+	}
+	span.SetAttributes(attribute.String("destination_queue", result.Destination))
+	dstAttrs := attribute.NewSet(
+		attribute.String("bridge", b.bridgeName),
+		attribute.String("destination_type", pub.Type()),
+		attribute.String("destination_queue", result.Destination),
+	)
+	b.metrics.messagesPublished.Add(ctx, 1, metric.WithAttributeSet(dstAttrs))
+	b.logger.DebugContext(ctx, "message published",
+		"destination_type", pub.Type(),
+		"destination_queue", result.Destination,
+	)
+	return nil
 }
 
 // Close closes all subscribers and publishers.
@@ -223,6 +263,7 @@ func buildBridge(bc BridgeConfig, m *Metrics, bridgeLabel string, logger *slog.L
 		From:       sub,
 		To:         pubs,
 		metrics:    m,
+		tracer:     newTracer(),
 		srcAttrs:   srcAttrs,
 		srcType:    srcType,
 		srcQueue:   srcQueue,

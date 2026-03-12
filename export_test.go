@@ -1,10 +1,21 @@
 package mqbridge
 
 import (
+	"context"
 	"log/slog"
 
 	"go.opentelemetry.io/otel/attribute"
 )
+
+// NewTraceHandlerForTest exposes newTraceHandler for testing.
+func NewTraceHandlerForTest(h slog.Handler) slog.Handler {
+	return newTraceHandler(h)
+}
+
+// SetupOTelProvidersForTest exposes setupOTelProviders for testing.
+func SetupOTelProvidersForTest(ctx context.Context) (func(context.Context) error, error) {
+	return setupOTelProviders(ctx)
+}
 
 // NewBridgeForTest creates a Bridge with the given subscriber, publishers, and metric attributes.
 // This is intended for testing only.
@@ -19,6 +30,7 @@ func NewBridgeForTest(sub Subscriber, pubs []Publisher, srcType, srcQueue string
 		From:       sub,
 		To:         pubs,
 		metrics:    m,
+		tracer:     newTracer(),
 		srcAttrs:   srcAttrs,
 		srcType:    srcType,
 		srcQueue:   srcQueue,

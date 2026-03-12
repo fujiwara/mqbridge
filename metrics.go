@@ -9,8 +9,13 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 // Metrics holds OpenTelemetry metric instruments for mqbridge.
@@ -70,9 +75,10 @@ func newMetrics() (*Metrics, error) {
 	}, nil
 }
 
-// setupMeterProvider initializes the OpenTelemetry MeterProvider if OTEL_EXPORTER_OTLP_ENDPOINT is set.
+// setupOTelProviders initializes OpenTelemetry MeterProvider and TracerProvider
+// if OTEL_EXPORTER_OTLP_ENDPOINT is set.
 // Returns a shutdown function and any error. If the endpoint is not set, returns a no-op shutdown.
-func setupMeterProvider(ctx context.Context) (func(context.Context) error, error) {
+func setupOTelProviders(ctx context.Context) (func(context.Context) error, error) {
 	noop := func(context.Context) error { return nil }
 
 	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" {
@@ -80,28 +86,61 @@ func setupMeterProvider(ctx context.Context) (func(context.Context) error, error
 	}
 
 	protocol := os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL")
-	var exporter sdkmetric.Exporter
+
+	var metricExporter sdkmetric.Exporter
+	var traceExporter sdktrace.SpanExporter
 	var err error
+
 	switch protocol {
 	case "grpc":
-		exporter, err = otlpmetricgrpc.New(ctx)
+		metricExporter, err = otlpmetricgrpc.New(ctx)
+		if err != nil {
+			return noop, fmt.Errorf("failed to create OTLP metrics exporter: %w", err)
+		}
+		traceExporter, err = otlptracegrpc.New(ctx)
+		if err != nil {
+			return noop, fmt.Errorf("failed to create OTLP trace exporter: %w", err)
+		}
 	case "http/protobuf", "":
-		exporter, err = otlpmetrichttp.New(ctx)
+		metricExporter, err = otlpmetrichttp.New(ctx)
+		if err != nil {
+			return noop, fmt.Errorf("failed to create OTLP metrics exporter: %w", err)
+		}
+		traceExporter, err = otlptracehttp.New(ctx)
+		if err != nil {
+			return noop, fmt.Errorf("failed to create OTLP trace exporter: %w", err)
+		}
 	default:
 		return noop, fmt.Errorf("unsupported OTEL_EXPORTER_OTLP_PROTOCOL: %s", protocol)
 	}
-	if err != nil {
-		return noop, fmt.Errorf("failed to create OTLP metrics exporter: %w", err)
-	}
 
-	provider := sdkmetric.NewMeterProvider(
-		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter)),
+	res := resource.NewWithAttributes(
+		semconv.SchemaURL,
+		semconv.ServiceName("mqbridge"),
 	)
-	otel.SetMeterProvider(provider)
+
+	meterProvider := sdkmetric.NewMeterProvider(
+		sdkmetric.WithResource(res),
+		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExporter)),
+	)
+	otel.SetMeterProvider(meterProvider)
+
+	tracerProvider := sdktrace.NewTracerProvider(
+		sdktrace.WithResource(res),
+		sdktrace.WithBatcher(traceExporter),
+	)
+	otel.SetTracerProvider(tracerProvider)
 
 	if protocol == "" {
 		protocol = "http/protobuf"
 	}
-	slog.Info("OpenTelemetry metrics enabled", "protocol", protocol)
-	return provider.Shutdown, nil
+	slog.Info("OpenTelemetry enabled", "protocol", protocol)
+
+	shutdown := func(ctx context.Context) error {
+		if err := tracerProvider.Shutdown(ctx); err != nil {
+			slog.Error("failed to shutdown tracer provider", "error", err)
+		}
+		return meterProvider.Shutdown(ctx)
+	}
+	return shutdown, nil
 }

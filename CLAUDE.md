@@ -22,7 +22,9 @@ go fmt ./...
 - `export_test.go` — Test helpers that need access to unexported fields (e.g. `NewBridgeForTest`)
 - `config.go` — Config structs, Jsonnet loader (`jsonnet-armed`)
 - `cli.go` — CLI definition (`kong`), `RunCLI()` entry point
-- `metrics.go` — OpenTelemetry metrics instruments and setup
+- `metrics.go` — OpenTelemetry metrics instruments and provider setup (metrics + tracing)
+- `trace.go` — OpenTelemetry trace context propagation (W3C traceparent extract/inject)
+- `trace_log.go` — slog handler wrapper that adds trace_id/span_id to log records
 - `rabbitmq.go` — RabbitMQ subscriber/publisher (`amqp091-go`)
 - `simplemq.go` — SimpleMQ subscriber/publisher (`simplemq-api-go`)
 - `message.go` — SimpleMQ→RabbitMQ JSON message format
@@ -61,5 +63,8 @@ go fmt ./...
 | `github.com/fujiwara/sloghandler` | Structured log handler (colored text with source) |
 | `go.opentelemetry.io/otel` | OpenTelemetry API |
 | `go.opentelemetry.io/otel/sdk/metric` | OpenTelemetry metrics SDK |
+| `go.opentelemetry.io/otel/sdk/trace` | OpenTelemetry tracing SDK |
 | `go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp` | OTLP HTTP metrics exporter |
 | `go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc` | OTLP gRPC metrics exporter |
+| `go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp` | OTLP HTTP trace exporter |
+| `go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc` | OTLP gRPC trace exporter |

@@ -233,6 +233,13 @@ func (p *RabbitMQPublisher) Publish(ctx context.Context, msg *Message) (*Publish
 	for k, v := range customHeaders {
 		headers[k] = v
 	}
+	// Propagate W3C trace context as AMQP headers
+	if v := msg.Headers[headerTraceparent]; v != "" {
+		headers[headerTraceparent] = v
+	}
+	if v := msg.Headers[headerTracestate]; v != "" {
+		headers[headerTracestate] = v
+	}
 	pub := amqp.Publishing{
 		Headers:      headers,
 		Body:         msg.Body,

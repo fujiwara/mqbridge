@@ -38,8 +38,8 @@ Each bridge has one **subscriber** (source) and one or more **publishers** (dest
 - **Automatic reconnection**: RabbitMQ subscriber and publisher automatically reconnect with exponential backoff (1s–30s) on connection loss.
 - **Graceful shutdown**: On SIGTERM/SIGINT, waits for in-flight messages to complete before exiting.
 - **Named bridges**: Optional `name` field per bridge for readable log output.
-- **OpenTelemetry metrics**: Built-in metrics (received, published, errors, duration) auto-enabled via `OTEL_EXPORTER_OTLP_ENDPOINT`.
-- **Structured logging**: Text (colored) or JSON format with configurable log level.
+- **OpenTelemetry metrics and tracing**: Built-in metrics (received, published, errors, duration) and distributed tracing auto-enabled via `OTEL_EXPORTER_OTLP_ENDPOINT`. Trace context is propagated through messages using [W3C Trace Context](https://www.w3.org/TR/trace-context/) (`traceparent` header).
+- **Structured logging with trace correlation**: Text (colored) or JSON format with configurable log level. When tracing is active, `trace_id` and `span_id` are automatically included in log output.
 - **Jsonnet configuration**: Use [jsonnet-armed](https://github.com/fujiwara/jsonnet-armed) for configuration with environment variable support (`env()`, `must_env()`).
 - **Secret Manager integration**: Retrieve credentials from [Sakura Cloud Secret Manager](https://manual.sakura.ad.jp/cloud/appliance/secretsmanager/index.html) using `secret()` native function in Jsonnet.
 
@@ -317,13 +317,17 @@ data, _ := mqbridge.MarshalMessage(msg)
 
 Messages that fail validation at the bridge are logged and dropped (not retried), and counted in the `mqbridge.messages.dropped` metric.
 
-## Metrics
+## Observability
 
-mqbridge supports [OpenTelemetry](https://opentelemetry.io/) metrics. Metrics are auto-enabled when the `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable is set. When not set, metrics are disabled with zero overhead.
+mqbridge supports [OpenTelemetry](https://opentelemetry.io/) metrics and distributed tracing. Both are auto-enabled when the `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable is set. When not set, they are disabled with zero overhead.
 
 ```console
 $ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 mqbridge run -c config.jsonnet
 ```
+
+Both HTTP and gRPC protocols are supported. Set `OTEL_EXPORTER_OTLP_PROTOCOL` to `grpc` for gRPC transport (default: `http/protobuf`). All standard `OTEL_*` environment variables are supported.
+
+### Metrics
 
 The following metrics are exported:
 
@@ -339,7 +343,22 @@ The following metrics are exported:
 
 Attribute values are derived from the bridge configuration and message content. `bridge` is the bridge name (or index if unnamed). `source_type` / `destination_type` is `rabbitmq` or `simplemq`. `source_queue` is the source queue name. `destination_queue` is the SimpleMQ queue name, or the exchange name for RabbitMQ (from each message).
 
-Both HTTP and gRPC protocols are supported. Set `OTEL_EXPORTER_OTLP_PROTOCOL` to `grpc` for gRPC transport (default: `http/protobuf`). All standard `OTEL_*` environment variables are supported.
+### Tracing
+
+mqbridge creates a span (`mqbridge.bridge`) for each message processed through a bridge. Trace context is propagated using [W3C Trace Context](https://www.w3.org/TR/trace-context/) format.
+
+**Trace context extraction** (incoming messages):
+1. Checks for `traceparent` header in the message
+2. Falls back to `rabbitmq.header.traceparent` (set when RabbitMQ messages carry trace context in custom AMQP headers)
+
+**Trace context injection** (outgoing messages):
+- `traceparent` (and `tracestate` if present) are injected into message headers before publishing
+
+This is compatible with [simplemq-subscriber](https://github.com/fujiwara/simplemq-subscriber), which uses the same trace context propagation format.
+
+### Log Trace Correlation
+
+When tracing is active, `trace_id` and `span_id` from the current span context are automatically added to all log records that have a span in their context. This works with both text and JSON log formats.
 
 ## LICENSE
 
