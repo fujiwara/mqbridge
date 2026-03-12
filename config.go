@@ -8,6 +8,7 @@ import (
 	"time"
 
 	armed "github.com/fujiwara/jsonnet-armed"
+	sscli "github.com/fujiwara/sakura-secrets-cli"
 )
 
 // Config is the top-level configuration for mqbridge.
@@ -107,7 +108,7 @@ func evaluateJsonnet(ctx context.Context, path string) ([]byte, error) {
 	var buf bytes.Buffer
 	cli := &armed.CLI{Filename: path}
 	cli.SetWriter(&buf)
-	cli.AddFunctions(secretNativeFunction(ctx))
+	cli.AddFunctions(sscli.SecretNativeFunction(ctx))
 	if err := cli.Run(ctx); err != nil {
 		return nil, fmt.Errorf("failed to evaluate jsonnet %q: %w", path, err)
 	}
