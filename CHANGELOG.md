@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.2.0](https://github.com/fujiwara/mqbridge/compare/v0.1.1...v0.2.0) - 2026-03-13
+- Add OpenTelemetry tracing with W3C trace context propagation by @fujiwara in https://github.com/fujiwara/mqbridge/pull/31
+
 ## [v0.1.1](https://github.com/fujiwara/mqbridge/compare/v0.1.0...v0.1.1) - 2026-03-12
 - Use sscli.SecretNativeFunction instead of duplicated code by @fujiwara in https://github.com/fujiwara/mqbridge/pull/29
 
