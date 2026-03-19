@@ -57,11 +57,24 @@ func requireRabbitMQ(t *testing.T) *amqp.Connection {
 }
 
 type testEnv struct {
-	t         *testing.T
-	smqServer *localserver.Server
-	smqClient *message.Client
-	rmqConn   *amqp.Connection
-	ctx       context.Context
+	t            *testing.T
+	smqServer    *localserver.Server
+	smqClient    *message.Client
+	rmqConn      *amqp.Connection
+	ctx          context.Context
+	bridgeSeqNum int
+}
+
+func init() {
+	logLevel := os.Getenv("MQBRIDGE_LOG_LEVEL")
+	if logLevel == "" {
+		logLevel = "info"
+	}
+	logFormat := os.Getenv("MQBRIDGE_LOG_FORMAT")
+	if logFormat == "" {
+		logFormat = "text"
+	}
+	mqbridge.SetupLoggerForTest(logFormat, logLevel)
 }
 
 func newTestEnv(t *testing.T, needsRabbitMQ bool) *testEnv {
@@ -93,6 +106,12 @@ func (e *testEnv) uniqueName(prefix string) string {
 
 func (e *testEnv) runBridge(bridges []mqbridge.BridgeConfig) context.CancelFunc {
 	e.t.Helper()
+	// Assign unique names to bridges so that log output from
+	// multiple instances is distinguishable.
+	for i := range bridges {
+		bridges[i].Name = fmt.Sprintf("app%d/bridge%d", e.bridgeSeqNum, i)
+	}
+	e.bridgeSeqNum++
 	cfg := &mqbridge.Config{
 		RabbitMQ: mqbridge.RabbitMQConfig{URL: testRabbitMQURL},
 		SimpleMQ: mqbridge.SimpleMQConfig{APIURL: e.smqServer.URL()},
@@ -426,6 +445,87 @@ func TestSimpleMQToRabbitMQ(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("timeout waiting for message in RabbitMQ")
 	}
+}
+
+// TestCompetingConsumers verifies that two mqbridge instances sharing the same
+// RabbitMQ queue deliver each message exactly once to SimpleMQ (no duplicates).
+func TestCompetingConsumers(t *testing.T) {
+	env := newTestEnv(t, true)
+	exchange := env.uniqueName("cc-exchange")
+	queue := env.uniqueName("cc-queue")
+	dest := env.uniqueName("cc-dest")
+
+	bridgeConfig := []mqbridge.BridgeConfig{
+		{
+			From: mqbridge.FromConfig{
+				RabbitMQ: &mqbridge.FromRabbitMQConfig{
+					Queue: queue, Exchange: exchange,
+					ExchangeType: "topic", RoutingKey: "#",
+				},
+			},
+			To: []mqbridge.ToConfig{
+				{SimpleMQ: &mqbridge.ToSimpleMQConfig{Queue: dest, APIKey: testAPIKey}},
+			},
+		},
+	}
+
+	// Start two competing bridge instances sharing the same queue.
+	stop1 := env.runBridge(bridgeConfig)
+	defer stop1()
+	stop2 := env.runBridge(bridgeConfig)
+	defer stop2()
+
+	// Publish multiple messages.
+	const messageCount = 20
+	sent := make(map[string]struct{}, messageCount)
+	for i := range messageCount {
+		body := fmt.Sprintf("cc-msg-%d-%d", i, time.Now().UnixNano())
+		sent[body] = struct{}{}
+		env.publishToRabbitMQ(exchange, "test.key", body)
+	}
+
+	// Receive all messages from SimpleMQ destination.
+	received := make(map[string]int, messageCount)
+	for range 100 {
+		time.Sleep(200 * time.Millisecond)
+		res, err := env.smqClient.ReceiveMessage(env.ctx, message.ReceiveMessageParams{
+			QueueName: message.QueueName(dest),
+		})
+		if err != nil {
+			continue
+		}
+		recvOK, ok := res.(*message.ReceiveMessageOK)
+		if !ok || len(recvOK.Messages) == 0 {
+			// No more messages — check if we have them all.
+			if len(received) >= messageCount {
+				break
+			}
+			continue
+		}
+		decoded, err := base64.StdEncoding.DecodeString(string(recvOK.Messages[0].Content))
+		if err != nil {
+			t.Fatalf("failed to decode message: %v", err)
+		}
+		msg := mqbridge.UnmarshalMessage(decoded)
+		received[string(msg.Body)]++
+	}
+
+	// Verify: every sent message received exactly once.
+	for body := range sent {
+		count, ok := received[body]
+		if !ok {
+			t.Errorf("message not received: %q", body)
+		} else if count != 1 {
+			t.Errorf("message received %d times (expected 1): %q", count, body)
+		}
+	}
+	// Verify: no unexpected messages.
+	for body, count := range received {
+		if _, ok := sent[body]; !ok {
+			t.Errorf("unexpected message received %d times: %q", count, body)
+		}
+	}
+	t.Logf("sent %d messages, received %d unique messages", messageCount, len(received))
 }
 
 // traceparentRe matches a valid W3C traceparent header value.

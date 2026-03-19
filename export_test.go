@@ -17,6 +17,11 @@ func SetupOTelProvidersForTest(ctx context.Context) (func(context.Context) error
 	return setupOTelProviders(ctx)
 }
 
+// SetupLoggerForTest exposes setupLogger for testing.
+func SetupLoggerForTest(format, level string) {
+	setupLogger(format, level)
+}
+
 // NewBridgeForTest creates a Bridge with the given subscriber, publishers, and metric attributes.
 // This is intended for testing only.
 func NewBridgeForTest(sub Subscriber, pubs []Publisher, srcType, srcQueue string) *Bridge {
