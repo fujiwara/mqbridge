@@ -64,6 +64,18 @@ type testEnv struct {
 	ctx       context.Context
 }
 
+func init() {
+	logLevel := os.Getenv("MQBRIDGE_LOG_LEVEL")
+	if logLevel == "" {
+		logLevel = "info"
+	}
+	logFormat := os.Getenv("MQBRIDGE_LOG_FORMAT")
+	if logFormat == "" {
+		logFormat = "text"
+	}
+	mqbridge.SetupLoggerForTest(logFormat, logLevel)
+}
+
 func newTestEnv(t *testing.T, needsRabbitMQ bool) *testEnv {
 	t.Helper()
 	smqServer := localserver.NewServer(localserver.Config{APIKey: testAPIKey})
