@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.2.1](https://github.com/fujiwara/mqbridge/compare/v0.2.0...v0.2.1) - 2026-03-19
+- Add competing consumers test for HA queue sharing by @fujiwara in https://github.com/fujiwara/mqbridge/pull/33
+- Add High Availability section and TOC to README by @fujiwara in https://github.com/fujiwara/mqbridge/pull/35
+
 ## [v0.2.0](https://github.com/fujiwara/mqbridge/compare/v0.1.1...v0.2.0) - 2026-03-13
 - Add OpenTelemetry tracing with W3C trace context propagation by @fujiwara in https://github.com/fujiwara/mqbridge/pull/31
 
