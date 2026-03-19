@@ -57,11 +57,12 @@ func requireRabbitMQ(t *testing.T) *amqp.Connection {
 }
 
 type testEnv struct {
-	t         *testing.T
-	smqServer *localserver.Server
-	smqClient *message.Client
-	rmqConn   *amqp.Connection
-	ctx       context.Context
+	t            *testing.T
+	smqServer    *localserver.Server
+	smqClient    *message.Client
+	rmqConn      *amqp.Connection
+	ctx          context.Context
+	bridgeSeqNum int
 }
 
 func init() {
@@ -105,6 +106,12 @@ func (e *testEnv) uniqueName(prefix string) string {
 
 func (e *testEnv) runBridge(bridges []mqbridge.BridgeConfig) context.CancelFunc {
 	e.t.Helper()
+	// Assign unique names to bridges so that log output from
+	// multiple instances is distinguishable.
+	for i := range bridges {
+		bridges[i].Name = fmt.Sprintf("app%d/bridge%d", e.bridgeSeqNum, i)
+	}
+	e.bridgeSeqNum++
 	cfg := &mqbridge.Config{
 		RabbitMQ: mqbridge.RabbitMQConfig{URL: testRabbitMQURL},
 		SimpleMQ: mqbridge.SimpleMQConfig{APIURL: e.smqServer.URL()},
