@@ -2,6 +2,16 @@
 
 A message bridge between [RabbitMQ](https://www.rabbitmq.com/) and [SimpleMQ (Sakura Cloud)](https://manual.sakura.ad.jp/cloud/appliance/simplemq/index.html). Define multiple forwarding rules (bridges) in a configuration file and run them concurrently.
 
+## Table of Contents
+
+- [Overview](#overview) / [Features](#features)
+- [Message Delivery](#message-delivery)
+- [Installation](#installation) / [Usage](#usage)
+- [Configuration](#configuration) — [Per-bridge URL Override](#per-bridge-url-override) / [Secret Manager](#secret-manager-integration)
+- [Message Format](#message-format)
+- [High Availability](#high-availability)
+- [Observability](#observability) — [Metrics](#metrics) / [Tracing](#tracing)
+
 ## Overview
 
 ```
@@ -316,6 +326,28 @@ data, _ := mqbridge.MarshalMessage(msg)
 ```
 
 Messages that fail validation at the bridge are logged and dropped (not retried), and counted in the `mqbridge.messages.dropped` metric.
+
+## High Availability
+
+You can run multiple mqbridge instances with the same configuration to achieve high availability. Each message is delivered to exactly one instance — no duplication occurs.
+
+```
+               +------------+
+               | mqbridge   |---+
+               | instance 1 |   |
+        +------+            |   |   +-------------+
+        |      +------------+   +-->| destination |
+ source |                       |   |   queue(s)  |
+ queue--+                       +-->|             |
+        |      +------------+   |   +-------------+
+        +------+ mqbridge   |---+
+               | instance 2 |
+               +------------+
+```
+
+- No configuration changes are needed — just run multiple instances with the same config.
+- **RabbitMQ source**: RabbitMQ distributes messages across consumers using round-robin ([competing consumers pattern](https://www.rabbitmq.com/tutorials/tutorial-two-go#round-robin-dispatching)). Unacknowledged messages are automatically redelivered to the remaining instances on failure.
+- **SimpleMQ source**: Each message is received by one poller and deleted after successful processing. Other instances will not see the same message.
 
 ## Observability
 
