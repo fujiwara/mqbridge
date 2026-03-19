@@ -2,6 +2,16 @@
 
 A message bridge between [RabbitMQ](https://www.rabbitmq.com/) and [SimpleMQ (Sakura Cloud)](https://manual.sakura.ad.jp/cloud/appliance/simplemq/index.html). Define multiple forwarding rules (bridges) in a configuration file and run them concurrently.
 
+## Table of Contents
+
+- [Overview](#overview) / [Features](#features)
+- [Message Delivery](#message-delivery)
+- [Installation](#installation) / [Usage](#usage)
+- [Configuration](#configuration) — [Per-bridge URL Override](#per-bridge-url-override) / [Secret Manager](#secret-manager-integration)
+- [Message Format](#message-format)
+- [High Availability](#high-availability)
+- [Observability](#observability) — [Metrics](#metrics) / [Tracing](#tracing)
+
 ## Overview
 
 ```
@@ -316,6 +326,27 @@ data, _ := mqbridge.MarshalMessage(msg)
 ```
 
 Messages that fail validation at the bridge are logged and dropped (not retried), and counted in the `mqbridge.messages.dropped` metric.
+
+## High Availability
+
+You can run multiple mqbridge instances with the same configuration to achieve high availability. When multiple instances subscribe to the same RabbitMQ queue, RabbitMQ distributes messages across consumers using round-robin ([competing consumers pattern](https://www.rabbitmq.com/tutorials/tutorial-two-go#round-robin-dispatching)). Each message is delivered to exactly one instance — no duplication occurs.
+
+```
+                  ┌──────────┐
+                  │ mqbridge │───┐
+                  │ instance1│   │
+           ┌─────┤          │   │   ┌──────────┐
+ RabbitMQ  │     └──────────┘   ├──►│ SimpleMQ │
+  queue ───┤                    │   │dest queue│
+           │     ┌──────────┐   ├──►│          │
+           └─────┤ mqbridge │───┘   └──────────┘
+                  │ instance2│
+                  └──────────┘
+```
+
+- No configuration changes are needed — just run multiple instances with the same config.
+- If one instance goes down, unacknowledged messages are automatically redelivered to the remaining instances.
+- Manual acknowledgement (`auto-ack: false`) ensures messages are not lost on instance failure.
 
 ## Observability
 
