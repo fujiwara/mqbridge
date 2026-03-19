@@ -332,16 +332,17 @@ Messages that fail validation at the bridge are logged and dropped (not retried)
 You can run multiple mqbridge instances with the same configuration to achieve high availability. When multiple instances subscribe to the same RabbitMQ queue, RabbitMQ distributes messages across consumers using round-robin ([competing consumers pattern](https://www.rabbitmq.com/tutorials/tutorial-two-go#round-robin-dispatching)). Each message is delivered to exactly one instance — no duplication occurs.
 
 ```
-                  ┌──────────┐
-                  │ mqbridge │───┐
-                  │ instance1│   │
-           ┌─────┤          │   │   ┌──────────┐
- RabbitMQ  │     └──────────┘   ├──►│ SimpleMQ │
-  queue ───┤                    │   │dest queue│
-           │     ┌──────────┐   ├──►│          │
-           └─────┤ mqbridge │───┘   └──────────┘
-                  │ instance2│
-                  └──────────┘
+              +------------+
+              | mqbridge   |---+
+              | instance 1 |   |
+        +-----+            |   |   +------------+
+        |     +------------+   +-->| SimpleMQ   |
+ RabbitMQ                      |   | dest queue |
+  queue-+                      +-->|            |
+        |     +------------+   |   +------------+
+        +-----+ mqbridge   |---+
+              | instance 2 |
+              +------------+
 ```
 
 - No configuration changes are needed — just run multiple instances with the same config.
