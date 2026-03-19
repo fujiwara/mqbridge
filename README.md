@@ -329,25 +329,25 @@ Messages that fail validation at the bridge are logged and dropped (not retried)
 
 ## High Availability
 
-You can run multiple mqbridge instances with the same configuration to achieve high availability. When multiple instances subscribe to the same RabbitMQ queue, RabbitMQ distributes messages across consumers using round-robin ([competing consumers pattern](https://www.rabbitmq.com/tutorials/tutorial-two-go#round-robin-dispatching)). Each message is delivered to exactly one instance — no duplication occurs.
+You can run multiple mqbridge instances with the same configuration to achieve high availability. Each message is delivered to exactly one instance — no duplication occurs.
 
 ```
-              +------------+
-              | mqbridge   |---+
-              | instance 1 |   |
-        +-----+            |   |   +------------+
-        |     +------------+   +-->| SimpleMQ   |
- RabbitMQ                      |   | dest queue |
-  queue-+                      +-->|            |
-        |     +------------+   |   +------------+
-        +-----+ mqbridge   |---+
-              | instance 2 |
-              +------------+
+               +------------+
+               | mqbridge   |---+
+               | instance 1 |   |
+        +------+            |   |   +-------------+
+        |      +------------+   +-->| destination |
+ source |                       |   |   queue(s)  |
+ queue--+                       +-->|             |
+        |      +------------+   |   +-------------+
+        +------+ mqbridge   |---+
+               | instance 2 |
+               +------------+
 ```
 
 - No configuration changes are needed — just run multiple instances with the same config.
-- If one instance goes down, unacknowledged messages are automatically redelivered to the remaining instances.
-- Manual acknowledgement (`auto-ack: false`) ensures messages are not lost on instance failure.
+- **RabbitMQ source**: RabbitMQ distributes messages across consumers using round-robin ([competing consumers pattern](https://www.rabbitmq.com/tutorials/tutorial-two-go#round-robin-dispatching)). Unacknowledged messages are automatically redelivered to the remaining instances on failure.
+- **SimpleMQ source**: Each message is received by one poller and deleted after successful processing. Other instances will not see the same message.
 
 ## Observability
 
