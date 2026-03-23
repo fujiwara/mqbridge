@@ -198,7 +198,7 @@ func TestRabbitMQToSimpleMQ(t *testing.T) {
 			From: mqbridge.FromConfig{
 				RabbitMQ: &mqbridge.FromRabbitMQConfig{
 					Queue: queue, Exchange: exchange,
-					ExchangeType: "topic", RoutingKey: "#",
+					ExchangeType: "topic", RoutingKey: mqbridge.RoutingKeys{"#"},
 				},
 			},
 			To: []mqbridge.ToConfig{
@@ -226,6 +226,58 @@ func TestRabbitMQToSimpleMQ(t *testing.T) {
 	}
 }
 
+func TestRabbitMQToSimpleMQMultipleRoutingKeys(t *testing.T) {
+	env := newTestEnv(t, true)
+	exchange := env.uniqueName("multi-rk-exchange")
+	queue := env.uniqueName("multi-rk-queue")
+	dest := env.uniqueName("multi-rk-dest")
+
+	stop := env.runBridge([]mqbridge.BridgeConfig{
+		{
+			From: mqbridge.FromConfig{
+				RabbitMQ: &mqbridge.FromRabbitMQConfig{
+					Queue: queue, Exchange: exchange,
+					ExchangeType: "topic", RoutingKey: mqbridge.RoutingKeys{"foo.*", "bar.*"},
+				},
+			},
+			To: []mqbridge.ToConfig{
+				{SimpleMQ: &mqbridge.ToSimpleMQConfig{Queue: dest, APIKey: testAPIKey}},
+			},
+		},
+	})
+	defer stop()
+
+	// Message matching "foo.*" should be received.
+	body1 := fmt.Sprintf("msg-foo-%d", time.Now().UnixNano())
+	env.publishToRabbitMQ(exchange, "foo.test", body1)
+	received1 := env.receiveFromSimpleMQ(dest)
+	if received1 == nil {
+		t.Fatal("expected message for foo.test, got nil")
+	}
+	if string(received1.Body) != body1 {
+		t.Errorf("body: expected %q, got %q", body1, string(received1.Body))
+	}
+
+	// Message matching "bar.*" should be received.
+	body2 := fmt.Sprintf("msg-bar-%d", time.Now().UnixNano())
+	env.publishToRabbitMQ(exchange, "bar.test", body2)
+	received2 := env.receiveFromSimpleMQ(dest)
+	if received2 == nil {
+		t.Fatal("expected message for bar.test, got nil")
+	}
+	if string(received2.Body) != body2 {
+		t.Errorf("body: expected %q, got %q", body2, string(received2.Body))
+	}
+
+	// Message not matching any routing key should NOT be received.
+	env.publishToRabbitMQ(exchange, "baz.test", "should-not-arrive")
+	time.Sleep(1 * time.Second)
+	received3 := env.receiveFromSimpleMQ(dest)
+	if received3 != nil {
+		t.Errorf("expected no message for baz.test, got %q", string(received3.Body))
+	}
+}
+
 func TestRabbitMQToSimpleMQFanout(t *testing.T) {
 	env := newTestEnv(t, true)
 	exchange := env.uniqueName("fanout-exchange")
@@ -239,7 +291,7 @@ func TestRabbitMQToSimpleMQFanout(t *testing.T) {
 			From: mqbridge.FromConfig{
 				RabbitMQ: &mqbridge.FromRabbitMQConfig{
 					Queue: queue, Exchange: exchange,
-					ExchangeType: "topic", RoutingKey: "#",
+					ExchangeType: "topic", RoutingKey: mqbridge.RoutingKeys{"#"},
 				},
 			},
 			To: []mqbridge.ToConfig{
@@ -288,7 +340,7 @@ func TestRabbitMQToSimpleMQExchangePassive(t *testing.T) {
 			From: mqbridge.FromConfig{
 				RabbitMQ: &mqbridge.FromRabbitMQConfig{
 					Queue: queue, Exchange: exchange,
-					ExchangeType: "topic", RoutingKey: "#",
+					ExchangeType: "topic", RoutingKey: mqbridge.RoutingKeys{"#"},
 					ExchangePassive: true,
 				},
 			},
@@ -460,7 +512,7 @@ func TestCompetingConsumers(t *testing.T) {
 			From: mqbridge.FromConfig{
 				RabbitMQ: &mqbridge.FromRabbitMQConfig{
 					Queue: queue, Exchange: exchange,
-					ExchangeType: "topic", RoutingKey: "#",
+					ExchangeType: "topic", RoutingKey: mqbridge.RoutingKeys{"#"},
 				},
 			},
 			To: []mqbridge.ToConfig{
@@ -570,7 +622,7 @@ func TestRabbitMQToSimpleMQTraceInjection(t *testing.T) {
 			From: mqbridge.FromConfig{
 				RabbitMQ: &mqbridge.FromRabbitMQConfig{
 					Queue: queue, Exchange: exchange,
-					ExchangeType: "topic", RoutingKey: "#",
+					ExchangeType: "topic", RoutingKey: mqbridge.RoutingKeys{"#"},
 				},
 			},
 			To: []mqbridge.ToConfig{
@@ -613,7 +665,7 @@ func TestRabbitMQToSimpleMQTracePreservation(t *testing.T) {
 			From: mqbridge.FromConfig{
 				RabbitMQ: &mqbridge.FromRabbitMQConfig{
 					Queue: queue, Exchange: exchange,
-					ExchangeType: "topic", RoutingKey: "#",
+					ExchangeType: "topic", RoutingKey: mqbridge.RoutingKeys{"#"},
 				},
 			},
 			To: []mqbridge.ToConfig{
@@ -664,7 +716,7 @@ func TestRabbitMQToSimpleMQFanoutTraceID(t *testing.T) {
 			From: mqbridge.FromConfig{
 				RabbitMQ: &mqbridge.FromRabbitMQConfig{
 					Queue: queue, Exchange: exchange,
-					ExchangeType: "topic", RoutingKey: "#",
+					ExchangeType: "topic", RoutingKey: mqbridge.RoutingKeys{"#"},
 				},
 			},
 			To: []mqbridge.ToConfig{

@@ -47,14 +47,36 @@ type ToConfig struct {
 	SimpleMQ *ToSimpleMQConfig `json:"simplemq,omitempty"`
 }
 
+// RoutingKeys holds one or more routing keys.
+// It accepts both a single string and an array of strings in JSON/Jsonnet.
+type RoutingKeys []string
+
+// UnmarshalJSON implements json.Unmarshaler.
+// It accepts both a single string ("key") and an array (["key1", "key2"]).
+func (rk *RoutingKeys) UnmarshalJSON(data []byte) error {
+	// Try as a single string first.
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		*rk = RoutingKeys{s}
+		return nil
+	}
+	// Try as an array of strings.
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err != nil {
+		return fmt.Errorf("routing_key must be a string or array of strings: %w", err)
+	}
+	*rk = RoutingKeys(arr)
+	return nil
+}
+
 // FromRabbitMQConfig defines a RabbitMQ source.
 type FromRabbitMQConfig struct {
-	RabbitMQConfig         // embedded: url (overrides global)
-	Queue           string `json:"queue"`
-	Exchange        string `json:"exchange"`
-	ExchangeType    string `json:"exchange_type"`
-	RoutingKey      string `json:"routing_key"`
-	ExchangePassive bool   `json:"exchange_passive"`
+	RabbitMQConfig              // embedded: url (overrides global)
+	Queue           string      `json:"queue"`
+	Exchange        string      `json:"exchange"`
+	ExchangeType    string      `json:"exchange_type"`
+	RoutingKey      RoutingKeys `json:"routing_key"`
+	ExchangePassive bool        `json:"exchange_passive"`
 }
 
 // FromSimpleMQConfig defines a SimpleMQ source.

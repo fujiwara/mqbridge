@@ -72,9 +72,9 @@ func (s *RabbitMQSubscriber) subscribeOnce(ctx context.Context, handler func(ctx
 	if exchangeType == "" {
 		exchangeType = "direct"
 	}
-	routingKey := s.config.RoutingKey
-	if routingKey == "" {
-		routingKey = "#"
+	routingKeys := s.config.RoutingKey
+	if len(routingKeys) == 0 {
+		routingKeys = []string{"#"}
 	}
 	var err error
 	if s.config.ExchangePassive {
@@ -111,14 +111,16 @@ func (s *RabbitMQSubscriber) subscribeOnce(ctx context.Context, handler func(ctx
 	); err != nil {
 		return fmt.Errorf("failed to declare queue %q: %w", s.config.Queue, err)
 	}
-	if err := s.ch.QueueBind(
-		s.config.Queue,
-		routingKey,
-		s.config.Exchange,
-		false, // no-wait
-		nil,
-	); err != nil {
-		return fmt.Errorf("failed to bind queue %q to exchange %q: %w", s.config.Queue, s.config.Exchange, err)
+	for _, rk := range routingKeys {
+		if err := s.ch.QueueBind(
+			s.config.Queue,
+			rk,
+			s.config.Exchange,
+			false, // no-wait
+			nil,
+		); err != nil {
+			return fmt.Errorf("failed to bind queue %q to exchange %q with routing key %q: %w", s.config.Queue, s.config.Exchange, rk, err)
+		}
 	}
 
 	msgs, err := s.ch.Consume(
@@ -134,7 +136,7 @@ func (s *RabbitMQSubscriber) subscribeOnce(ctx context.Context, handler func(ctx
 		return fmt.Errorf("failed to consume from queue %q: %w", s.config.Queue, err)
 	}
 
-	s.logger.Info("RabbitMQ subscriber started", "queue", s.config.Queue, "exchange", s.config.Exchange)
+	s.logger.Info("RabbitMQ subscriber started", "queue", s.config.Queue, "exchange", s.config.Exchange, "routing_keys", routingKeys)
 	for {
 		select {
 		case <-ctx.Done():
