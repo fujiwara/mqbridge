@@ -207,7 +207,7 @@ By default, all bridges share the global `rabbitmq.url` and `simplemq.api_url` s
 - RabbitMQ source requires SimpleMQ destinations. SimpleMQ source supports both RabbitMQ and SimpleMQ destinations. RabbitMQ → RabbitMQ bridging is not supported; use RabbitMQ's built-in features such as [exchange bindings](https://www.rabbitmq.com/docs/e2e) or the [shovel plugin](https://www.rabbitmq.com/docs/shovel) instead.
 - `exchange_type` defaults to `direct` if omitted.
 - `exchange_passive` (default: `false`): When `true`, the subscriber uses `ExchangeDeclarePassive` instead of `ExchangeDeclare`. This verifies the exchange exists without attempting to create it or modify its properties. Useful when the exchange is managed externally and its properties (type, durable, etc.) may differ from what mqbridge would declare, avoiding `PRECONDITION_FAILED` errors.
-- `routing_key` defaults to `#` if omitted.
+- `routing_key` accepts a single string or an array of strings for multiple bindings. Defaults to `#` if omitted. Example: `routing_key: ['foo.*', 'bar.*']`
 - `polling_interval` defaults to `1s`. Invalid values silently fall back to `1s`.
 
 ### Secret Manager Integration

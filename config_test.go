@@ -37,6 +37,66 @@ func TestRenderConfig(t *testing.T) {
 	}
 }
 
+func TestRoutingKeysUnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name    string
+		json    string
+		want    []string
+		wantErr bool
+	}{
+		{
+			name: "single string",
+			json: `{"routing_key": "#"}`,
+			want: []string{"#"},
+		},
+		{
+			name: "array of strings",
+			json: `{"routing_key": ["foo.*", "bar.#"]}`,
+			want: []string{"foo.*", "bar.#"},
+		},
+		{
+			name: "empty array",
+			json: `{"routing_key": []}`,
+			want: []string{},
+		},
+		{
+			name: "omitted defaults to nil",
+			json: `{}`,
+			want: nil,
+		},
+		{
+			name:    "invalid type",
+			json:    `{"routing_key": 123}`,
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var cfg struct {
+				RoutingKey mqbridge.RoutingKeys `json:"routing_key"`
+			}
+			err := json.Unmarshal([]byte(tt.json), &cfg)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(cfg.RoutingKey) != len(tt.want) {
+				t.Fatalf("got %v, want %v", cfg.RoutingKey, tt.want)
+			}
+			for i := range tt.want {
+				if cfg.RoutingKey[i] != tt.want[i] {
+					t.Errorf("index %d: got %q, want %q", i, cfg.RoutingKey[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
 func TestConfigValidation(t *testing.T) {
 	tests := []struct {
 		name    string
