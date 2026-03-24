@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.3.1](https://github.com/fujiwara/mqbridge/compare/v0.3.0...v0.3.1) - 2026-03-24
+- Improve message send/receive logging levels by @fujiwara in https://github.com/fujiwara/mqbridge/pull/38
+- Skip polling interval when SimpleMQ queue has messages by @fujiwara in https://github.com/fujiwara/mqbridge/pull/40
+
 ## [v0.3.0](https://github.com/fujiwara/mqbridge/compare/v0.2.1...v0.3.0) - 2026-03-23
 - Support multiple routing keys for RabbitMQ exchange binding by @fujiwara in https://github.com/fujiwara/mqbridge/pull/36
 
