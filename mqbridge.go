@@ -63,10 +63,14 @@ func (b *Bridge) Run(ctx context.Context) error {
 		defer span.End()
 
 		b.metrics.messagesReceived.Add(ctx, 1, metric.WithAttributeSet(b.srcAttrs))
-		b.logger.DebugContext(ctx, "message received",
+		b.logger.InfoContext(ctx, "message received",
+			"bridge", b.bridgeName,
 			"source_type", b.srcType,
 			"source_queue", b.srcQueue,
 			"size", len(msg.Body),
+		)
+		b.logger.DebugContext(ctx, "message received headers",
+			"headers", msg.Headers,
 		)
 		start := time.Now()
 		for _, pub := range b.To {
@@ -110,6 +114,7 @@ func (b *Bridge) publish(ctx context.Context, pub Publisher, msg *Message) error
 	)
 	defer span.End()
 
+	start := time.Now()
 	result, err := pub.Publish(ctx, msg)
 	if err != nil {
 		span.RecordError(err)
@@ -123,9 +128,15 @@ func (b *Bridge) publish(ctx context.Context, pub Publisher, msg *Message) error
 		attribute.String("destination_queue", result.Destination),
 	)
 	b.metrics.messagesPublished.Add(ctx, 1, metric.WithAttributeSet(dstAttrs))
-	b.logger.DebugContext(ctx, "message published",
+	elapsed := time.Since(start)
+	b.logger.InfoContext(ctx, "message published",
+		"bridge", b.bridgeName,
 		"destination_type", pub.Type(),
 		"destination_queue", result.Destination,
+		"elapsed", elapsed,
+	)
+	b.logger.DebugContext(ctx, "message published headers",
+		"headers", msg.Headers,
 	)
 	return nil
 }
