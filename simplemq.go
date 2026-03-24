@@ -52,32 +52,41 @@ func NewSimpleMQSubscriber(config FromSimpleMQConfig, logger *slog.Logger) (*Sim
 // Subscribe polls the SimpleMQ queue and calls the handler for each message.
 func (s *SimpleMQSubscriber) Subscribe(ctx context.Context, handler func(ctx context.Context, msg *Message) error) error {
 	s.logger.Info("SimpleMQ subscriber started", "queue", s.queueName, "interval", s.pollingInterval)
-	ticker := time.NewTicker(s.pollingInterval)
-	defer ticker.Stop()
-
 	for {
-		select {
-		case <-ctx.Done():
+		if err := ctx.Err(); err != nil {
 			s.logger.Info("SimpleMQ subscriber stopping", "queue", s.queueName)
-			return ctx.Err()
-		case <-ticker.C:
-			if err := s.poll(ctx, handler); err != nil {
-				s.logger.Error("SimpleMQ poll error", "queue", s.queueName, "error", err)
+			return err
+		}
+		received, err := s.poll(ctx, handler)
+		if err != nil {
+			s.logger.Error("SimpleMQ poll error", "queue", s.queueName, "error", err)
+		}
+		if !received {
+			select {
+			case <-ctx.Done():
+				s.logger.Info("SimpleMQ subscriber stopping", "queue", s.queueName)
+				return ctx.Err()
+			case <-time.After(s.pollingInterval):
 			}
 		}
 	}
 }
 
-func (s *SimpleMQSubscriber) poll(ctx context.Context, handler func(ctx context.Context, msg *Message) error) error {
+// poll receives and processes messages from the queue.
+// Returns true if any messages were received (caller should poll again immediately).
+func (s *SimpleMQSubscriber) poll(ctx context.Context, handler func(ctx context.Context, msg *Message) error) (bool, error) {
 	res, err := s.client.ReceiveMessage(ctx, message.ReceiveMessageParams{
 		QueueName: message.QueueName(s.queueName),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to receive message: %w", err)
+		return false, fmt.Errorf("failed to receive message: %w", err)
 	}
 	recvOK, ok := res.(*message.ReceiveMessageOK)
 	if !ok {
-		return fmt.Errorf("unexpected response type: %T", res)
+		return false, fmt.Errorf("unexpected response type: %T", res)
+	}
+	if len(recvOK.Messages) == 0 {
+		return false, nil
 	}
 	// Use a non-cancellable context for message processing and deletion
 	// so in-flight work completes even when the parent context is cancelled.
@@ -115,7 +124,7 @@ func (s *SimpleMQSubscriber) poll(ctx context.Context, handler func(ctx context.
 			s.logger.Error("failed to delete message", "queue", s.queueName, "messageId", raw.ID, "error", err)
 		}
 	}
-	return nil
+	return true, nil
 }
 
 // Close is a no-op for SimpleMQSubscriber (HTTP client needs no explicit close).
