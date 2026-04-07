@@ -79,7 +79,7 @@ func init() {
 
 func newTestEnv(t *testing.T, needsRabbitMQ bool) *testEnv {
 	t.Helper()
-	smqServer := localserver.NewServer(localserver.Config{APIKey: testAPIKey})
+	smqServer := localserver.NewTestServer(localserver.Config{APIKey: testAPIKey})
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(func() {
 		cancel()
@@ -90,7 +90,7 @@ func newTestEnv(t *testing.T, needsRabbitMQ bool) *testEnv {
 		rmqConn = requireRabbitMQ(t)
 		t.Cleanup(func() { rmqConn.Close() })
 	}
-	smqClient := newSimpleMQTestClient(t, smqServer.URL())
+	smqClient := newSimpleMQTestClient(t, smqServer.TestURL())
 	return &testEnv{
 		t:         t,
 		smqServer: smqServer,
@@ -114,7 +114,7 @@ func (e *testEnv) runBridge(bridges []mqbridge.BridgeConfig) context.CancelFunc 
 	e.bridgeSeqNum++
 	cfg := &mqbridge.Config{
 		RabbitMQ: mqbridge.RabbitMQConfig{URL: testRabbitMQURL},
-		SimpleMQ: mqbridge.SimpleMQConfig{APIURL: e.smqServer.URL()},
+		SimpleMQ: mqbridge.SimpleMQConfig{APIURL: e.smqServer.TestURL()},
 		Bridges:  bridges,
 	}
 	app, err := mqbridge.New(cfg)
