@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.3.2](https://github.com/fujiwara/mqbridge/compare/v0.3.1...v0.3.2) - 2026-04-07
+- Include message headers in publish log at INFO level by @fujiwara in https://github.com/fujiwara/mqbridge/pull/47
+- Update actions and Go module dependencies by @fujiwara in https://github.com/fujiwara/mqbridge/pull/49
+
 ## [v0.3.1](https://github.com/fujiwara/mqbridge/compare/v0.3.0...v0.3.1) - 2026-03-24
 - Improve message send/receive logging levels by @fujiwara in https://github.com/fujiwara/mqbridge/pull/38
 - Skip polling interval when SimpleMQ queue has messages by @fujiwara in https://github.com/fujiwara/mqbridge/pull/40
