@@ -122,6 +122,9 @@ func (b *Bridge) publish(ctx context.Context, pub Publisher, msg *Message) error
 		return err
 	}
 	span.SetAttributes(attribute.String("destination_queue", result.Destination))
+	for k, v := range msg.Headers {
+		span.SetAttributes(attribute.String("messaging.header."+k, v))
+	}
 	dstAttrs := attribute.NewSet(
 		attribute.String("bridge", b.bridgeName),
 		attribute.String("destination_type", pub.Type()),
