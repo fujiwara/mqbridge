@@ -134,8 +134,6 @@ func (b *Bridge) publish(ctx context.Context, pub Publisher, msg *Message) error
 		"destination_type", pub.Type(),
 		"destination_queue", result.Destination,
 		"elapsed", elapsed,
-	)
-	b.logger.DebugContext(ctx, "message published headers",
 		"headers", msg.Headers,
 	)
 	return nil
