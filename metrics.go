@@ -75,6 +75,15 @@ func newMetrics() (*Metrics, error) {
 	}, nil
 }
 
+// initCounters initializes all counters to zero with the given attributes
+// so that they appear in metrics output before any events occur.
+func (m *Metrics) initCounters(ctx context.Context, attrs metric.MeasurementOption) {
+	m.messagesReceived.Add(ctx, 0, attrs)
+	m.messagesPublished.Add(ctx, 0, attrs)
+	m.messageErrors.Add(ctx, 0, attrs)
+	m.messagesDropped.Add(ctx, 0, attrs)
+}
+
 // setupOTelProviders initializes OpenTelemetry MeterProvider and TracerProvider
 // if OTEL_EXPORTER_OTLP_ENDPOINT is set.
 // Returns a shutdown function and any error. If the endpoint is not set, returns a no-op shutdown.
