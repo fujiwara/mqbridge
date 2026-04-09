@@ -1,3 +1,3 @@
 package mqbridge
 
-var Version = "v0.3.2"
+var Version = "v0.4.0"
