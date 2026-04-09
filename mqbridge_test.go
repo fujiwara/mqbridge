@@ -117,7 +117,7 @@ func (e *testEnv) runBridge(bridges []mqbridge.BridgeConfig) context.CancelFunc 
 		SimpleMQ: mqbridge.SimpleMQConfig{APIURL: e.smqServer.TestURL()},
 		Bridges:  bridges,
 	}
-	app, err := mqbridge.New(cfg)
+	app, err := mqbridge.New(e.ctx, cfg)
 	if err != nil {
 		e.t.Fatalf("New failed: %v", err)
 	}

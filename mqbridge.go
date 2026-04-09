@@ -167,11 +167,11 @@ type App struct {
 
 // New creates a new App from a config.
 // It validates the config (which also applies global defaults to per-bridge settings).
-func New(cfg *Config) (*App, error) {
+func New(ctx context.Context, cfg *Config) (*App, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	bridges, err := buildBridges(cfg)
+	bridges, err := buildBridges(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build bridges: %w", err)
 	}
@@ -211,7 +211,7 @@ func (a *App) Run(ctx context.Context) error {
 	return nil
 }
 
-func buildBridges(cfg *Config) ([]*Bridge, error) {
+func buildBridges(ctx context.Context, cfg *Config) ([]*Bridge, error) {
 	m, err := newMetrics()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create metrics: %w", err)
@@ -225,7 +225,7 @@ func buildBridges(cfg *Config) ([]*Bridge, error) {
 			bridgeLabel = fmt.Sprintf("%d", i)
 		}
 		logger := slog.Default().With("bridge", bridgeLabel)
-		bridge, err := buildBridge(bc, m, bridgeLabel, logger)
+		bridge, err := buildBridge(ctx, bc, m, bridgeLabel, logger)
 		if err != nil {
 			return nil, fmt.Errorf("bridges[%d]: %w", i, err)
 		}
@@ -234,7 +234,7 @@ func buildBridges(cfg *Config) ([]*Bridge, error) {
 	return bridges, nil
 }
 
-func buildBridge(bc BridgeConfig, m *Metrics, bridgeLabel string, logger *slog.Logger) (*Bridge, error) {
+func buildBridge(ctx context.Context, bc BridgeConfig, m *Metrics, bridgeLabel string, logger *slog.Logger) (*Bridge, error) {
 	var sub Subscriber
 	var pubs []Publisher
 
@@ -271,7 +271,7 @@ func buildBridge(bc BridgeConfig, m *Metrics, bridgeLabel string, logger *slog.L
 		}
 	}
 
-	return &Bridge{
+	b := &Bridge{
 		From:       sub,
 		To:         pubs,
 		metrics:    m,
@@ -281,5 +281,7 @@ func buildBridge(bc BridgeConfig, m *Metrics, bridgeLabel string, logger *slog.L
 		srcQueue:   srcQueue,
 		bridgeName: bridgeLabel,
 		logger:     logger,
-	}, nil
+	}
+	b.metrics.initCounters(ctx, metric.WithAttributeSet(srcAttrs))
+	return b, nil
 }

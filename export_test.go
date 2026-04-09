@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 // NewTraceHandlerForTest exposes newTraceHandler for testing.
@@ -24,14 +25,14 @@ func SetupLoggerForTest(format, level string) {
 
 // NewBridgeForTest creates a Bridge with the given subscriber, publishers, and metric attributes.
 // This is intended for testing only.
-func NewBridgeForTest(sub Subscriber, pubs []Publisher, srcType, srcQueue string) *Bridge {
+func NewBridgeForTest(ctx context.Context, sub Subscriber, pubs []Publisher, srcType, srcQueue string) *Bridge {
 	m, _ := newMetrics()
 	srcAttrs := attribute.NewSet(
 		attribute.String("bridge", "test"),
 		attribute.String("source_type", srcType),
 		attribute.String("source_queue", srcQueue),
 	)
-	return &Bridge{
+	b := &Bridge{
 		From:       sub,
 		To:         pubs,
 		metrics:    m,
@@ -42,4 +43,6 @@ func NewBridgeForTest(sub Subscriber, pubs []Publisher, srcType, srcQueue string
 		bridgeName: "test",
 		logger:     slog.Default().With("bridge", "test"),
 	}
+	b.metrics.initCounters(ctx, metric.WithAttributeSet(srcAttrs))
+	return b
 }

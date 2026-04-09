@@ -143,7 +143,7 @@ func histogramCount(m *metricdata.Metrics) uint64 {
 func TestMetricsSingleDestination(t *testing.T) {
 	reader := setupTestMeterProvider(t)
 
-	bridge := mqbridge.NewBridgeForTest(
+	bridge := mqbridge.NewBridgeForTest(t.Context(),
 		&mockSubscriber{messages: []*mqbridge.Message{
 			{Body: []byte("msg1")},
 			{Body: []byte("msg2")},
@@ -206,7 +206,7 @@ func TestMetricsFanout(t *testing.T) {
 	pub2 := &mockPublisher{destination: "dest-2", typeName: "simplemq"}
 	pub3 := &mockPublisher{destination: "dest-3", typeName: "simplemq"}
 
-	bridge := mqbridge.NewBridgeForTest(
+	bridge := mqbridge.NewBridgeForTest(t.Context(),
 		&mockSubscriber{messages: []*mqbridge.Message{
 			{Body: []byte("msg1")},
 			{Body: []byte("msg2")},
@@ -261,7 +261,7 @@ func TestMetricsFanout(t *testing.T) {
 func TestMetricsPublishError(t *testing.T) {
 	reader := setupTestMeterProvider(t)
 
-	bridge := mqbridge.NewBridgeForTest(
+	bridge := mqbridge.NewBridgeForTest(t.Context(),
 		&mockSubscriber{messages: []*mqbridge.Message{{Body: []byte("msg1")}}},
 		[]mqbridge.Publisher{&failingPublisher{typeName: "rabbitmq"}},
 		"simplemq", "src-queue",
@@ -303,7 +303,7 @@ func TestMetricsPublishError(t *testing.T) {
 func TestMetricsMessageDropped(t *testing.T) {
 	reader := setupTestMeterProvider(t)
 
-	bridge := mqbridge.NewBridgeForTest(
+	bridge := mqbridge.NewBridgeForTest(t.Context(),
 		&mockSubscriber{messages: []*mqbridge.Message{
 			{Body: []byte("good")},
 			{Body: []byte("bad")},

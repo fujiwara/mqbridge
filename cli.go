@@ -49,7 +49,7 @@ func (c *RunCmd) Run(ctx context.Context, globals *CLI) error {
 	if err != nil {
 		return err
 	}
-	a, err := New(cfg)
+	a, err := New(ctx, cfg)
 	if err != nil {
 		return err
 	}
