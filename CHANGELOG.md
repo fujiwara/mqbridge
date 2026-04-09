@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.4.0](https://github.com/fujiwara/mqbridge/compare/v0.3.2...v0.4.0) - 2026-04-09
+- Initialize metric counters to zero at bridge creation by @fujiwara in https://github.com/fujiwara/mqbridge/pull/50
+
 ## [v0.3.2](https://github.com/fujiwara/mqbridge/compare/v0.3.1...v0.3.2) - 2026-04-07
 - Include message headers in publish log at INFO level by @fujiwara in https://github.com/fujiwara/mqbridge/pull/47
 - Update actions and Go module dependencies by @fujiwara in https://github.com/fujiwara/mqbridge/pull/49
