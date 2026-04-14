@@ -11,6 +11,7 @@ import (
 
 	"github.com/fujiwara/mqbridge"
 	"github.com/fujiwara/simplemq-cli/localserver"
+	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -480,7 +481,7 @@ func TestSimpleMQToRabbitMQ(t *testing.T) {
 	})
 	defer stop()
 
-	// Case 1: no rabbitmq.message_id → SimpleMQ message ID should be used
+	// Case 1: no rabbitmq.message_id → RabbitMQ publisher generates UUID
 	testBody1 := fmt.Sprintf("msg-%s-no-id-%d", t.Name(), time.Now().UnixNano())
 	env.sendMessageToSimpleMQ(inbound, &mqbridge.Message{
 		Body: []byte(testBody1),
@@ -496,7 +497,10 @@ func TestSimpleMQToRabbitMQ(t *testing.T) {
 			t.Errorf("expected %q, got %q", testBody1, string(delivery.Body))
 		}
 		if delivery.MessageId == "" {
-			t.Error("expected non-empty MessageId (auto-assigned from SimpleMQ ID), got empty")
+			t.Error("expected non-empty MessageId (auto-generated UUID), got empty")
+		}
+		if _, err := uuid.Parse(delivery.MessageId); err != nil {
+			t.Errorf("expected valid UUID for auto-generated MessageId, got %q: %v", delivery.MessageId, err)
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("timeout waiting for message in RabbitMQ")

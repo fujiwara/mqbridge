@@ -260,6 +260,8 @@ func (p *RabbitMQPublisher) Publish(ctx context.Context, msg *Message) (*Publish
 	}
 	if v := msg.Headers[HeaderRabbitMQMessageID]; v != "" {
 		pub.MessageId = v
+	} else {
+		pub.MessageId = uuid.New().String()
 	}
 	if err := p.ch.PublishWithContext(
 		ctx,

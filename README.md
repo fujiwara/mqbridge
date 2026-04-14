@@ -302,7 +302,7 @@ When publishing to RabbitMQ, the publisher reads the destination from `Message.H
 - `rabbitmq.reply_to`, `rabbitmq.correlation_id`, `rabbitmq.content_type`, `rabbitmq.message_id` — mapped to the corresponding AMQP fields
 - `rabbitmq.header.<key>` — published as custom AMQP headers (prefix stripped)
 
-When consuming from SimpleMQ, if the message does not have a `rabbitmq.message_id` header, mqbridge automatically assigns the SimpleMQ message ID to `rabbitmq.message_id`. This ensures the RabbitMQ `MessageId` field is always populated.
+If the message does not have a `rabbitmq.message_id` header, the RabbitMQ publisher automatically generates a UUID v4 and sets it as the AMQP `MessageId`. This ensures every message published to RabbitMQ has a traceable identifier, regardless of the source.
 
 External producers sending messages to a SimpleMQ queue for RabbitMQ delivery must use the wire format above. The `rabbitmq.exchange` and `rabbitmq.routing_key` header keys must be present; to target the default exchange, set `"rabbitmq.exchange": ""` in the headers.
 
