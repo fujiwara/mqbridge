@@ -289,6 +289,8 @@ When consuming from RabbitMQ, the subscriber captures delivery metadata into `Me
 | `rabbitmq.message_id` | MessageId |
 | `rabbitmq.header.<key>` | Custom AMQP headers |
 
+If the original RabbitMQ message does not have a `MessageId`, mqbridge automatically generates a UUID v4 and assigns it to the `rabbitmq.message_id` header. This ensures every bridged message has a traceable identifier.
+
 This means RPC-related fields (`reply_to`, `correlation_id`) are preserved when forwarding to SimpleMQ, enabling request-reply patterns across the bridge.
 
 #### SimpleMQ → RabbitMQ
