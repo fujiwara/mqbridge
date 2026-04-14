@@ -8,7 +8,10 @@ import (
 )
 
 // Message is the common message type passed between Subscriber and Publisher.
+// ID is an in-memory identifier assigned by the subscriber (e.g. SimpleMQ message ID).
+// It is not included in the wire format.
 type Message struct {
+	ID      string
 	Body    []byte
 	Headers map[string]string
 }

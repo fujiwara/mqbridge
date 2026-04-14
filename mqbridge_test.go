@@ -481,7 +481,7 @@ func TestSimpleMQToRabbitMQ(t *testing.T) {
 	})
 	defer stop()
 
-	// Case 1: no rabbitmq.message_id → RabbitMQ publisher generates UUID
+	// Case 1: no rabbitmq.message_id → SimpleMQ message ID is used
 	testBody1 := fmt.Sprintf("msg-%s-no-id-%d", t.Name(), time.Now().UnixNano())
 	env.sendMessageToSimpleMQ(inbound, &mqbridge.Message{
 		Body: []byte(testBody1),
@@ -497,10 +497,11 @@ func TestSimpleMQToRabbitMQ(t *testing.T) {
 			t.Errorf("expected %q, got %q", testBody1, string(delivery.Body))
 		}
 		if delivery.MessageId == "" {
-			t.Error("expected non-empty MessageId (auto-generated UUID), got empty")
+			t.Error("expected non-empty MessageId (inherited from SimpleMQ), got empty")
 		}
+		// SimpleMQ local server assigns UUID-format IDs
 		if _, err := uuid.Parse(delivery.MessageId); err != nil {
-			t.Errorf("expected valid UUID for auto-generated MessageId, got %q: %v", delivery.MessageId, err)
+			t.Errorf("expected valid UUID for MessageId inherited from SimpleMQ, got %q: %v", delivery.MessageId, err)
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("timeout waiting for message in RabbitMQ")
