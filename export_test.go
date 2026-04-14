@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 
+	amqp "github.com/rabbitmq/amqp091-go"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
@@ -21,6 +22,11 @@ func SetupOTelProvidersForTest(ctx context.Context) (func(context.Context) error
 // SetupLoggerForTest exposes setupLogger for testing.
 func SetupLoggerForTest(format, level string) {
 	setupLogger(format, level)
+}
+
+// MessageFromDeliveryForTest exposes messageFromDelivery for testing.
+func MessageFromDeliveryForTest(d amqp.Delivery) *Message {
+	return messageFromDelivery(d)
 }
 
 // NewBridgeForTest creates a Bridge with the given subscriber, publishers, and metric attributes.

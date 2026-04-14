@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -315,6 +316,8 @@ func messageFromDelivery(d amqp.Delivery) *Message {
 	}
 	if d.MessageId != "" {
 		headers[HeaderRabbitMQMessageID] = d.MessageId
+	} else {
+		headers[HeaderRabbitMQMessageID] = uuid.New().String()
 	}
 	for k, v := range d.Headers {
 		headers[HeaderRabbitMQHeaderPrefix+k] = fmt.Sprintf("%v", v)

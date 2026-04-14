@@ -8,6 +8,7 @@ require (
 	github.com/fujiwara/sakura-secrets-cli v0.3.0
 	github.com/fujiwara/simplemq-cli v0.8.0
 	github.com/fujiwara/sloghandler v0.1.0
+	github.com/google/uuid v1.6.0
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/sacloud/saclient-go v0.3.5
 	github.com/sacloud/secretmanager-api-go v0.3.1
@@ -41,7 +42,6 @@ require (
 	github.com/gofrs/flock v0.13.0 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/go-jsonnet v0.21.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-envparse v0.1.0 // indirect
