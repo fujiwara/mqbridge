@@ -108,6 +108,12 @@ func (s *SimpleMQSubscriber) poll(ctx context.Context, handler func(ctx context.
 			continue
 		}
 		msg := UnmarshalMessage(decoded)
+		if msg.Headers == nil {
+			msg.Headers = make(map[string]string)
+		}
+		if _, ok := msg.Headers[HeaderRabbitMQMessageID]; !ok {
+			msg.Headers[HeaderRabbitMQMessageID] = string(raw.ID)
+		}
 		if err := handler(msgCtx, msg); err != nil {
 			s.logger.Error("failed to handle message, skipping delete",
 				"queue", s.queueName,
