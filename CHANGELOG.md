@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.4.1](https://github.com/fujiwara/mqbridge/compare/v0.4.0...v0.4.1) - 2026-04-14
+- Generate UUID for rabbitmq.message_id when not set by @fujiwara in https://github.com/fujiwara/mqbridge/pull/52
+
 ## [v0.4.0](https://github.com/fujiwara/mqbridge/compare/v0.3.2...v0.4.0) - 2026-04-09
 - Initialize metric counters to zero at bridge creation by @fujiwara in https://github.com/fujiwara/mqbridge/pull/50
 
