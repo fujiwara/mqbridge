@@ -11,6 +11,7 @@ import (
 
 	"github.com/fujiwara/mqbridge"
 	"github.com/fujiwara/simplemq-cli/localserver"
+	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -480,9 +481,10 @@ func TestSimpleMQToRabbitMQ(t *testing.T) {
 	})
 	defer stop()
 
-	testBody := fmt.Sprintf("msg-%s-%d", t.Name(), time.Now().UnixNano())
+	// Case 1: no rabbitmq.message_id → SimpleMQ message ID is used
+	testBody1 := fmt.Sprintf("msg-%s-no-id-%d", t.Name(), time.Now().UnixNano())
 	env.sendMessageToSimpleMQ(inbound, &mqbridge.Message{
-		Body: []byte(testBody),
+		Body: []byte(testBody1),
 		Headers: map[string]string{
 			mqbridge.HeaderRabbitMQExchange:   destExchange,
 			mqbridge.HeaderRabbitMQRoutingKey: "test.key",
@@ -491,8 +493,38 @@ func TestSimpleMQToRabbitMQ(t *testing.T) {
 
 	select {
 	case delivery := <-deliveries:
-		if string(delivery.Body) != testBody {
-			t.Errorf("expected %q, got %q", testBody, string(delivery.Body))
+		if string(delivery.Body) != testBody1 {
+			t.Errorf("expected %q, got %q", testBody1, string(delivery.Body))
+		}
+		if delivery.MessageId == "" {
+			t.Error("expected non-empty MessageId (inherited from SimpleMQ), got empty")
+		}
+		// SimpleMQ local server assigns UUID-format IDs
+		if _, err := uuid.Parse(delivery.MessageId); err != nil {
+			t.Errorf("expected valid UUID for MessageId inherited from SimpleMQ, got %q: %v", delivery.MessageId, err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("timeout waiting for message in RabbitMQ")
+	}
+
+	// Case 2: explicit rabbitmq.message_id → should be preserved
+	testBody2 := fmt.Sprintf("msg-%s-with-id-%d", t.Name(), time.Now().UnixNano())
+	env.sendMessageToSimpleMQ(inbound, &mqbridge.Message{
+		Body: []byte(testBody2),
+		Headers: map[string]string{
+			mqbridge.HeaderRabbitMQExchange:   destExchange,
+			mqbridge.HeaderRabbitMQRoutingKey: "test.key",
+			mqbridge.HeaderRabbitMQMessageID:  "explicit-id-456",
+		},
+	})
+
+	select {
+	case delivery := <-deliveries:
+		if string(delivery.Body) != testBody2 {
+			t.Errorf("expected %q, got %q", testBody2, string(delivery.Body))
+		}
+		if delivery.MessageId != "explicit-id-456" {
+			t.Errorf("expected MessageId %q, got %q", "explicit-id-456", delivery.MessageId)
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("timeout waiting for message in RabbitMQ")
