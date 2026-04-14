@@ -108,7 +108,7 @@ func (s *SimpleMQSubscriber) poll(ctx context.Context, handler func(ctx context.
 			continue
 		}
 		msg := UnmarshalMessage(decoded)
-		msg.ID = string(raw.ID)
+		msg.id = string(raw.ID)
 		if err := handler(msgCtx, msg); err != nil {
 			s.logger.Error("failed to handle message, skipping delete",
 				"queue", s.queueName,

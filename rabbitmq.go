@@ -260,8 +260,8 @@ func (p *RabbitMQPublisher) Publish(ctx context.Context, msg *Message) (*Publish
 	}
 	if v := msg.Headers[HeaderRabbitMQMessageID]; v != "" {
 		pub.MessageId = v
-	} else if msg.ID != "" {
-		pub.MessageId = msg.ID
+	} else if msg.id != "" {
+		pub.MessageId = msg.id
 	} else {
 		pub.MessageId = uuid.New().String()
 	}
