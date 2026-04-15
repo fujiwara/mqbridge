@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.4.2](https://github.com/fujiwara/mqbridge/compare/v0.4.1...v0.4.2) - 2026-04-15
+- Add log level metrics using sloghandler/otelmetrics by @fujiwara in https://github.com/fujiwara/mqbridge/pull/54
+- Add message_id to log messages and trace spans by @fujiwara in https://github.com/fujiwara/mqbridge/pull/56
+
 ## [v0.4.1](https://github.com/fujiwara/mqbridge/compare/v0.4.0...v0.4.1) - 2026-04-14
 - Generate UUID for rabbitmq.message_id when not set by @fujiwara in https://github.com/fujiwara/mqbridge/pull/52
 
