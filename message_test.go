@@ -150,6 +150,48 @@ func TestValidateForRabbitMQ(t *testing.T) {
 	}
 }
 
+func TestMessageID(t *testing.T) {
+	tests := []struct {
+		name   string
+		msg    *mqbridge.Message
+		wantID string
+	}{
+		{
+			name:   "in-memory id takes priority",
+			msg:    mqbridge.NewMessageWithIDForTest("simplemq-id", nil, map[string]string{mqbridge.HeaderRabbitMQMessageID: "rmq-id"}),
+			wantID: "simplemq-id",
+		},
+		{
+			name:   "falls back to rabbitmq.message_id header",
+			msg:    &mqbridge.Message{Headers: map[string]string{mqbridge.HeaderRabbitMQMessageID: "rmq-id"}},
+			wantID: "rmq-id",
+		},
+		{
+			name:   "in-memory id only",
+			msg:    mqbridge.NewMessageWithIDForTest("simplemq-id", nil, nil),
+			wantID: "simplemq-id",
+		},
+		{
+			name:   "no id set",
+			msg:    &mqbridge.Message{Headers: map[string]string{}},
+			wantID: "",
+		},
+		{
+			name:   "nil headers",
+			msg:    &mqbridge.Message{},
+			wantID: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.msg.MessageID()
+			if got != tt.wantID {
+				t.Errorf("MessageID() = %q, want %q", got, tt.wantID)
+			}
+		})
+	}
+}
+
 func TestRabbitMQPublishParams(t *testing.T) {
 	tests := []struct {
 		name       string

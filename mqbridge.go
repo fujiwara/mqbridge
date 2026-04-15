@@ -53,11 +53,13 @@ func (b *Bridge) Run(ctx context.Context) error {
 		// Extract trace context from incoming message headers
 		ctx = extractTraceContext(ctx, msg.Headers)
 
+		messageID := msg.MessageID()
 		ctx, span := b.tracer.Start(ctx, "mqbridge.bridge",
 			trace.WithAttributes(
 				attribute.String("bridge", b.bridgeName),
 				attribute.String("source_type", b.srcType),
 				attribute.String("source_queue", b.srcQueue),
+				attribute.String("message_id", messageID),
 			),
 		)
 		defer span.End()
@@ -67,6 +69,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 			"bridge", b.bridgeName,
 			"source_type", b.srcType,
 			"source_queue", b.srcQueue,
+			"message_id", messageID,
 			"size", len(msg.Body),
 		)
 		b.logger.DebugContext(ctx, "message received headers",
@@ -83,6 +86,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 					b.metrics.messagesDropped.Add(ctx, 1, metric.WithAttributeSet(b.srcAttrs))
 					b.logger.ErrorContext(ctx, "dropping malformed message",
 						"destination_type", pub.Type(),
+						"message_id", messageID,
 						"error", err,
 					)
 					span.RecordError(err)
@@ -92,6 +96,7 @@ func (b *Bridge) Run(ctx context.Context) error {
 				b.metrics.messageErrors.Add(ctx, 1, metric.WithAttributeSet(b.srcAttrs))
 				b.logger.ErrorContext(ctx, "failed to publish message",
 					"destination_type", pub.Type(),
+					"message_id", messageID,
 					"error", err,
 				)
 				span.RecordError(err)
@@ -110,6 +115,7 @@ func (b *Bridge) publish(ctx context.Context, pub Publisher, msg *Message) error
 		trace.WithAttributes(
 			attribute.String("bridge", b.bridgeName),
 			attribute.String("destination_type", pub.Type()),
+			attribute.String("message_id", msg.MessageID()),
 		),
 	)
 	defer span.End()
@@ -136,6 +142,7 @@ func (b *Bridge) publish(ctx context.Context, pub Publisher, msg *Message) error
 		"bridge", b.bridgeName,
 		"destination_type", pub.Type(),
 		"destination_queue", result.Destination,
+		"message_id", msg.MessageID(),
 		"elapsed", elapsed,
 		"headers", msg.Headers,
 	)
