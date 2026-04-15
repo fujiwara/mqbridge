@@ -16,6 +16,16 @@ type Message struct {
 	Headers map[string]string
 }
 
+// MessageID returns the message identifier.
+// It prefers the in-memory id (e.g. SimpleMQ message ID), then falls back to
+// the rabbitmq.message_id header. Returns empty string if neither is set.
+func (m *Message) MessageID() string {
+	if m.id != "" {
+		return m.id
+	}
+	return m.Headers[HeaderRabbitMQMessageID]
+}
+
 // MessageError represents an error caused by the message content itself
 // (e.g. missing required headers). Messages that cause this error cannot
 // be processed regardless of retries and should be dropped.

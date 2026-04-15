@@ -29,6 +29,15 @@ func MessageFromDeliveryForTest(d amqp.Delivery) *Message {
 	return messageFromDelivery(d)
 }
 
+// NewMessageWithIDForTest creates a Message with the unexported id field set.
+func NewMessageWithIDForTest(id string, body []byte, headers map[string]string) *Message {
+	return &Message{
+		id:      id,
+		Body:    body,
+		Headers: headers,
+	}
+}
+
 // NewBridgeForTest creates a Bridge with the given subscriber, publishers, and metric attributes.
 // This is intended for testing only.
 func NewBridgeForTest(ctx context.Context, sub Subscriber, pubs []Publisher, srcType, srcQueue string) *Bridge {
