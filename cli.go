@@ -10,6 +10,9 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/fujiwara/sloghandler"
+	"github.com/fujiwara/sloghandler/otelmetrics"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/metric"
 )
 
 // CLI defines the command-line interface for mqbridge.
@@ -103,6 +106,15 @@ func setupLogger(format, level string) {
 			Color:          true,
 			Source:         true,
 		})
+	}
+	meter := otel.Meter("github.com/fujiwara/mqbridge")
+	logCounter, err := meter.Int64Counter("mqbridge.log.messages",
+		metric.WithDescription("Number of log messages by level"),
+	)
+	if err != nil {
+		slog.Error("failed to create log messages counter", "error", err)
+	} else {
+		handler = otelmetrics.NewHandler(handler, logCounter)
 	}
 	slog.SetDefault(slog.New(newTraceHandler(handler)))
 }

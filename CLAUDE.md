@@ -61,6 +61,7 @@ go fmt ./...
 | `github.com/sacloud/secretmanager-api-go` | Sakura Cloud Secret Manager client |
 | `github.com/fujiwara/sakura-secrets-cli` | sakura-secrets-localserver (test) |
 | `github.com/fujiwara/sloghandler` | Structured log handler (colored text with source) |
+| `github.com/fujiwara/sloghandler/otelmetrics` | slog handler for log level metrics via OpenTelemetry |
 | `go.opentelemetry.io/otel` | OpenTelemetry API |
 | `go.opentelemetry.io/otel/sdk/metric` | OpenTelemetry metrics SDK |
 | `go.opentelemetry.io/otel/sdk/trace` | OpenTelemetry tracing SDK |
