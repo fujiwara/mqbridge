@@ -8,6 +8,7 @@ require (
 	github.com/fujiwara/sakura-secrets-cli v0.3.0
 	github.com/fujiwara/simplemq-cli v0.8.0
 	github.com/fujiwara/sloghandler v0.1.0
+	github.com/fujiwara/sloghandler/otelmetrics v0.1.0
 	github.com/google/uuid v1.6.0
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/sacloud/saclient-go v0.3.5
