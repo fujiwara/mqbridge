@@ -40,7 +40,7 @@ func RunCLI(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to setup OpenTelemetry providers: %w", err)
 	}
-	defer shutdownOTel(ctx)
+	defer shutdownOTel(context.WithoutCancel(ctx))
 	return kctx.Run(cli)
 }
 
