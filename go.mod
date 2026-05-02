@@ -11,7 +11,7 @@ require (
 	github.com/fujiwara/sloghandler/otelmetrics v0.1.0
 	github.com/google/uuid v1.6.0
 	github.com/rabbitmq/amqp091-go v1.10.0
-	github.com/sacloud/saclient-go v0.3.5
+	github.com/sacloud/saclient-go v0.3.7
 	github.com/sacloud/secretmanager-api-go v0.3.1
 	github.com/sacloud/simplemq-api-go v0.5.0
 	go.opentelemetry.io/otel v1.42.0
