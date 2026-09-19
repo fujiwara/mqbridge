@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.4.4](https://github.com/fujiwara/mqbridge/compare/v0.4.3...v0.4.4) - 2026-09-19
+- Rename CLAUDE.md to AGENTS.md by @fujiwara in https://github.com/fujiwara/mqbridge/pull/72
+
 ## [v0.4.3](https://github.com/fujiwara/mqbridge/compare/v0.4.2...v0.4.3) - 2026-04-16
 - Fix OTel provider shutdown failing with context canceled by @fujiwara in https://github.com/fujiwara/mqbridge/pull/57
 
